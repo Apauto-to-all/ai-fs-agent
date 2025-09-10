@@ -1,0 +1,36 @@
+[project]
+name = "ai-fs-agent"
+version = "0.1.0"
+description = "基于大模型的文件系统智能体，借助大模型实现对文件/文件夹的智能管理。"
+authors = [{ name = "Apauto-to-all", email = "apautotoall@outlook.com" }]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain>=1.0.0a4",
+    "langchain-openai>=0.3.32",
+    "pydantic>=2.11.7",
+    "python-dotenv>=1.1.1",
+    "structured-output-prompt>=1.0.0",
+]
+urls = { Homepage = "https://github.com/Apauto-to-all/ai-fs-agent" }
+
+[dependency-groups]
+dev = ["pytest>=8.4.2", "pytest-mock>=3.15.0"]
+
+
+# 主要使用清华源
+[[tool.uv.index]]
+name = "tuna"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+
+
+# 添加阿里云备用源
+[[tool.uv.index]]
+name = "aliyun"
+url = "https://mirrors.aliyun.com/pypi/simple/"
+
+
+# 最后默认源
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
