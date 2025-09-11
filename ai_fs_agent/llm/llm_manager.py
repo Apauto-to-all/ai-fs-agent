@@ -59,7 +59,7 @@ def _load_toml_config(path: Path) -> AppConfig:
     return AppConfig(models=models, routing=routing)
 
 
-class ModelManager:
+class LLMManager:
     def __init__(self):
         self.config = _load_toml_config(LLM_CONFIG_PATH)
         self._cache: Dict[str, Any] = {}  # id -> LLM 实例
