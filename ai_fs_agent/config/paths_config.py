@@ -3,26 +3,26 @@ import traceback
 
 logger = logging.getLogger(__name__)
 from pathlib import Path
-from ai_fs_agent.config.templates import MODEL_CONFIG_TEMPLATE, ENV_TEMPLATE
+from ai_fs_agent.config.templates import LLM_CONFIG_TEMPLATE, ENV_TEMPLATE
 
 
 # 项目根目录（基于当前文件位置向上推导）
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 # 子目录路径
-CONFIG_DIR = PROJECT_ROOT / "config"
+LOCAL_CONFIG_DIR = PROJECT_ROOT / "local_config"
 DATA_DIR = PROJECT_ROOT / "data"
 LOGS_DIR = PROJECT_ROOT / "logs"
 
 # 文件路径
-LLM_CONFIG_PATH = CONFIG_DIR / "llm_models.toml"
-ENV_PATH = CONFIG_DIR / ".env"
-USER_CONFIG_PATH = CONFIG_DIR / "user_config.json"
+LLM_CONFIG_PATH = LOCAL_CONFIG_DIR / "llm_models.toml"
+ENV_PATH = LOCAL_CONFIG_DIR / ".env"
+USER_CONFIG_PATH = LOCAL_CONFIG_DIR / "user_config.json"
 
 
 def ensure_directories() -> None:
     """确保所有必要目录存在"""
-    for d in [CONFIG_DIR, DATA_DIR, LOGS_DIR]:
+    for d in [LOCAL_CONFIG_DIR, DATA_DIR, LOGS_DIR]:
         d.mkdir(parents=True, exist_ok=True)
 
 
@@ -34,7 +34,7 @@ def ensure_files() -> None:
 
     # llm_models.toml
     if not LLM_CONFIG_PATH.exists():
-        LLM_CONFIG_PATH.write_text(MODEL_CONFIG_TEMPLATE, encoding="utf-8")
+        LLM_CONFIG_PATH.write_text(LLM_CONFIG_TEMPLATE, encoding="utf-8")
 
 
 def bootstrap_paths() -> None:

@@ -1,5 +1,5 @@
-# models.toml 文件模板
-MODEL_CONFIG_TEMPLATE = """# 模型配置文件模板
+# llm_models.toml 文件模板
+LLM_CONFIG_TEMPLATE = """# 模型配置文件模板
 [models.example]
 # 使用 OpenAI 兼容协议
 provider = "openai-compatible"
@@ -11,6 +11,8 @@ base_url = "https://api.openai.com/v1"
 api_key_env = "OPENAI_API_KEY"
 # 可选参数：透传到 ChatOpenAI 的额外配置，如超时、重试等。
 extra = { timeout = 30, max_retries = 3, temperature = 0.7, max_tokens = 4096 }
+# 可选参数：为该模型配置限流器
+rate_limiter = { requests_per_second = 1.0, check_every_n_seconds = 0.1, max_bucket_size = 1 }
 
 
 [models.qwen_plus]

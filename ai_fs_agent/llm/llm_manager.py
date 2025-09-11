@@ -1,4 +1,3 @@
-from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Dict, Optional, Any, List, Literal
@@ -7,6 +6,7 @@ import tomllib  # Python 3.11+
 from pydantic import BaseModel, Field
 
 from langchain_openai import ChatOpenAI  # 使用 OpenAI 兼容协议的客户端
+from langchain_core.rate_limiters import InMemoryRateLimiter
 from ai_fs_agent.config import LLM_CONFIG_PATH, ENV_PATH
 
 
@@ -17,6 +17,7 @@ class LlmModelSpec(BaseModel):
     base_url: str
     api_key_env: str
     extra: Dict[str, Any] = Field(default_factory=dict)
+    rate_limiter: Dict[str, Any] = Field(default_factory=dict)
 
 
 class RoutingConfig(BaseModel):
@@ -109,5 +110,11 @@ class LLMManager:
             for k in ("model", "base_url", "api_key"):
                 extra.pop(k, None)
             params.update(extra)
+
+        if spec.rate_limiter:
+            # 配置限流器
+            rate_limiter_data = dict(spec.rate_limiter)
+            rate_limiter = InMemoryRateLimiter(**rate_limiter_data)
+            return ChatOpenAI(**params, rate_limiter=rate_limiter)
 
         return ChatOpenAI(**params)
