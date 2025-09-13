@@ -8,33 +8,15 @@ from typing import Optional, List, Dict, Any
 import shutil
 from langchain.tools import tool
 from ai_fs_agent.config import user_config
+from ai_fs_agent.utils.check_workspace_dir import _check_workspace_dir
 
 FS_ROOT = user_config.workspace_dir
 
 
-def _root_path_check():
-    root_raw = FS_ROOT
-    # 配置检查
-    if root_raw is None:
-        raise ValueError("工作区根目录未配置")
-    if isinstance(root_raw, Path):
-        root = root_raw
-    elif isinstance(root_raw, str):
-        root = Path(root_raw)
-    else:
-        raise TypeError(f"工作区根目录类型不支持: {type(root_raw).__name__}")
-
-    # 路径合法性检查
-    if not root.is_absolute():
-        raise ValueError("工作区根目录必须是绝对路径")
-    if not root.exists():
-        raise ValueError(f"工作区根目录不存在")
-    if root.is_file():
-        raise ValueError(f"工作区根目录不是文件夹")
-
-
 def _ensure_in_root(p: Path) -> Path:
-    _root_path_check()  # 确保 FS_ROOT 已正确配置
+    err = _check_workspace_dir(FS_ROOT)  # 确保 FS_ROOT 已正确配置
+    if err:
+        raise ValueError(err)
     p = (FS_ROOT / p).resolve() if not p.is_absolute() else p.resolve()
     if FS_ROOT not in p.parents and p != FS_ROOT:
         raise ValueError(f"路径越界: {p}，请使用相对路径")
@@ -68,7 +50,7 @@ def list_dir(
     path: str = ".", pattern: Optional[str] = None, max_items: int = 200
 ) -> Dict[str, Any]:
     """列出指定目录的内容，支持可选的 glob 模式过滤。
-    注意：路径必须在工作区根目录内，使用相对路径如 '.'（当前目录）或 'subfolder'。
+    注意：路径必须在工作区目录内，使用相对路径如 '.'（当前目录）或 'subfolder'。
     避免使用绝对路径（如 'C:\\'）或系统根 '/'
     示例：path='.' 列出根目录；path='subfolder' 列出子目录。
     """
@@ -81,7 +63,7 @@ def list_dir(
         items = list(base.glob(pattern)) if pattern else list(base.iterdir())
         items = items[:max_items]
         return {"ok": True, "items": [_stat_entry(p) for p in items]}
-    except (ValueError, TypeError) as e:
+    except ValueError as e:
         return {"ok": False, "error": str(e)}
     except Exception as e:
         logger.error(traceback.format_exc())
@@ -94,7 +76,7 @@ def read_file(
     path: str, max_bytes: int = 2 * 1024 * 1024, encoding: str = "utf-8"
 ) -> Dict[str, Any]:
     """读取文本文件，默认最多读取 2MB，超过则截断。
-    注意：路径必须在工作区根目录内，使用相对路径如 'file.txt' 或 'subfolder/file.txt'。
+    注意：使用相对路径如 'file.txt' 或 'subfolder/file.txt'。
     示例：path='script.py' 读取根目录下的文件。
     """
     try:
@@ -224,7 +206,7 @@ def copy_path(src: str, dst: str, overwrite: bool = False) -> Dict[str, Any]:
 @tool("make_dir")
 def make_dir(path: str, exist_ok: bool = True) -> Dict[str, Any]:
     """创建目录（递归）。
-    注意：路径必须在工作区根目录内，使用相对路径如 'newdir' 或 'parent/newdir'。
+    注意：路径必须在工作区目录内，使用相对路径如 'newdir' 或 'parent/newdir'。
     示例：path='logs' 在根目录创建目录。
     """
     try:
@@ -245,7 +227,7 @@ def make_dir(path: str, exist_ok: bool = True) -> Dict[str, Any]:
 @tool("delete_path")
 def delete_path(path: str, recursive: bool = False) -> Dict[str, Any]:
     """删除文件或目录；目录默认要求为空，recursive=True 递归删除。
-    避免绝对路径，否则会因越界而失败。删除操作不可逆，请谨慎。
+    警告：删除操作不可逆，请谨慎。
     示例：path='temp.txt' 删除文件；path='tempdir', recursive=True 删除目录。
     """
     try:
@@ -279,7 +261,7 @@ def search_glob(
     path: str = ".", pattern: str = "**/*", max_items: int = 500
 ) -> Dict[str, Any]:
     """使用 glob 模式搜索文件/目录。
-    注意：起始路径必须在工作区根目录内，使用相对路径如 '.' 或 'subfolder'。
+    注意：起始路径必须在工作区目录内，使用相对路径如 '.' 或 'subfolder'。
     示例：path='.', pattern='*.py' 搜索根目录下的 Python 文件。
     """
     try:
