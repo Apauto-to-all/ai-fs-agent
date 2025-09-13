@@ -6,9 +6,10 @@ authors = [{ name = "Apauto-to-all", email = "apautotoall@outlook.com" }]
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "langchain>=1.0.0a4",
-    "langchain-openai>=0.3.32",
-    "pydantic>=2.11.7",
+    "langchain>=1.0.0a5",
+    "langchain-openai>=0.3.33",
+    "langgraph-supervisor>=0.0.29",
+    "pydantic>=2.11.8",
     "python-dotenv>=1.1.1",
     "structured-output-prompt>=1.0.0",
 ]
