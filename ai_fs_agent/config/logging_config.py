@@ -28,7 +28,7 @@ def setup_logging() -> None:
                 backupCount=365,  # 保留最近365天的日志文件
                 encoding="utf-8",
             ),
-            logging.StreamHandler(),
+            # logging.StreamHandler(),
         ],
     )
 
