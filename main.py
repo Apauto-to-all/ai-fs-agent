@@ -11,7 +11,7 @@ from langchain_core.messages import (
     BaseMessage,
 )
 
-from ai_fs_agent.agents.fs_agent import build_fs_agent
+from ai_fs_agent.agents import build_fs_agent, build_local_config_agent
 
 
 def format_tool_message_content(content: str) -> str:
@@ -76,8 +76,8 @@ def main():
     """
     print("欢迎使用文件助手聊天机器人！输入 'exit' 或 'quit' 退出。")
 
-    agent = build_fs_agent()  # 若需要调试细节可在内部加 verbose
-    config = {"configurable": {"thread_id": "chat_session"}}
+    agent = build_local_config_agent()  # 若需要调试细节可在内部加 verbose
+    config = {"configurable": {"thread_id": "1"}}
 
     prev_len = 0  # 已打印消息数量
 
