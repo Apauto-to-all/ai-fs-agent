@@ -29,13 +29,13 @@ def set_workspace_dir() -> Dict[str, Any]:
             if not path:
                 print("路径不能为空，请重新输入。")
                 continue
-            candidate = Path(path).expanduser().resolve()
-            err = _check_workspace_dir(candidate)
+            err = _check_workspace_dir(path)
             if err:
                 print(f"无效路径: {err} 请重新输入。")
                 continue
+
             # 成功，设置并返回
-            user_config.workspace_dir = candidate
+            user_config.workspace_dir = path
             return {"ok": True, "message": "工作区目录已设置"}
 
         # 循环结束但未成功

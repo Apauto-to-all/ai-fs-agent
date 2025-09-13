@@ -1,8 +1,8 @@
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 
-def _check_workspace_dir(workspace_dir: Optional[Path] = None) -> str:
+def _check_workspace_dir(workspace_dir: Optional[Union[Path, str]] = None) -> str:
     root_raw = workspace_dir
     # 配置检查
     if root_raw is None:
@@ -10,6 +10,10 @@ def _check_workspace_dir(workspace_dir: Optional[Path] = None) -> str:
     if isinstance(root_raw, Path):
         root = root_raw
     elif isinstance(root_raw, str):
+        # 去除前后空白
+        root_raw = root_raw.strip()
+        # 去除可能的引号
+        root_raw = root_raw.strip('"').strip("'")
         root = Path(root_raw)
     else:
         return f"工作区目录类型不支持: {type(root_raw).__name__}"
