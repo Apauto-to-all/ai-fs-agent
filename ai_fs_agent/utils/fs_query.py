@@ -1,0 +1,105 @@
+import logging
+import traceback
+
+logger = logging.getLogger(__name__)
+from pathlib import Path
+from typing import Optional, Dict, Any, Literal
+from ai_fs_agent.utils.fs_utils import _ensure_in_root, _rel, _stat_entry
+
+
+class FsQueryOperator:
+    """只读查询：list/search/stat/read（单次，不支持批量）。"""
+
+    def _one(
+        self,
+        op: str,
+        path: str,
+        pattern: Optional[str],
+        max_items: int,
+        max_bytes: int,
+        encoding: str,
+    ) -> Dict[str, Any]:
+        try:
+            if op not in {"list", "search", "stat", "read"}:
+                return {"ok": False, "op": op, "error": f"不支持的操作: {op}"}
+
+            base = _ensure_in_root(Path(path))
+
+            if op == "list":
+                if not base.exists():
+                    return {"ok": False, "op": op, "error": f"不存在: {path}"}
+                if not base.is_dir():
+                    return {"ok": False, "op": op, "error": f"非目录: {path}"}
+                items_ = list(base.glob(pattern)) if pattern else list(base.iterdir())
+                items_ = items_[: max(0, max_items)]
+                return {"ok": True, "op": op, "data": [_stat_entry(p) for p in items_]}
+
+            if op == "search":
+                if not base.exists():
+                    return {"ok": False, "op": op, "error": f"不存在: {path}"}
+                if not pattern:
+                    return {"ok": False, "op": op, "error": "search 需要提供 pattern"}
+                results = []
+                for p in base.glob(pattern):
+                    try:
+                        results.append(_stat_entry(p))
+                    except Exception:
+                        continue
+                    if len(results) >= max(0, max_items):
+                        break
+                return {"ok": True, "op": op, "data": results}
+
+            if op == "stat":
+                if not base.exists():
+                    return {"ok": False, "op": op, "error": f"不存在: {path}"}
+                return {"ok": True, "op": op, "data": _stat_entry(base)}
+
+            if op == "read":
+                if not base.exists():
+                    return {"ok": False, "op": op, "error": f"不存在: {path}"}
+                if base.is_dir():
+                    return {"ok": False, "op": op, "error": f"非文件: {path}"}
+                size = base.stat().st_size
+                with base.open("rb") as f:
+                    data = f.read(max_bytes)
+                text = data.decode(encoding, errors="replace")
+                return {
+                    "ok": True,
+                    "op": op,
+                    "data": {
+                        "path": _rel(base),
+                        "size": size,
+                        "truncated": size > len(data),
+                        "content": text,
+                    },
+                }
+
+            return {"ok": False, "op": op, "error": f"未知操作: {op}"}
+        except (ValueError, TypeError) as e:
+            return {"ok": False, "op": op, "error": str(e)}
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            logger.error(f"fs_query 执行失败: {e}")
+            return {"ok": False, "op": op, "error": "子项执行失败"}
+
+    def run(
+        self,
+        op: Optional[Literal["list", "search", "stat", "read"]],
+        path: str,
+        pattern: Optional[str],
+        max_items: int,
+        max_bytes: int,
+    ) -> Dict[str, Any]:
+        encoding: str = "utf-8"
+        try:
+            if op is None:
+                return {"ok": False, "error": "缺少操作类型 op"}
+            return self._one(op, path, pattern, max_items, max_bytes, encoding)
+        except (ValueError, TypeError) as e:
+            return {"ok": False, "op": op, "error": str(e)}
+        except Exception:
+            logger.error(traceback.format_exc())
+            return {"ok": False, "op": op, "error": "fs_query 执行失败"}
+
+
+_fs_query_operator = FsQueryOperator()
