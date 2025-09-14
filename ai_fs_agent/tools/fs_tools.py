@@ -3,295 +3,198 @@ import traceback
 
 logger = logging.getLogger(__name__)
 
-from pathlib import Path
-from typing import Optional, List, Dict, Any
-import shutil
+from typing import Optional, List, Dict, Any, Literal
 from langchain.tools import tool
-from ai_fs_agent.config import user_config
-from ai_fs_agent.utils.check_workspace_dir import _check_workspace_dir
-
-FS_ROOT = user_config.workspace_dir
+from ai_fs_agent.utils.fs_query import _fs_query_operator
+from ai_fs_agent.utils.fs_apply import _fs_apply_operator
 
 
-def _ensure_in_root(p: Path) -> Path:
-    err = _check_workspace_dir(FS_ROOT)  # 确保 FS_ROOT 已正确配置
-    if err:
-        raise ValueError(err)
-    p = (FS_ROOT / p).resolve() if not p.is_absolute() else p.resolve()
-    if FS_ROOT not in p.parents and p != FS_ROOT:
-        raise ValueError(f"路径越界: {p}，请使用相对路径")
-    return p
-
-
-def _format_size(size_bytes: int) -> str:
-    """将字节大小转换为人类可读的单位（B, KB, MB, GB, TB）。"""
-    if size_bytes == 0:
-        return "0 B"
-    units = ["B", "KB", "MB", "GB", "TB"]
-    unit_index = 0
-    size = float(size_bytes)
-    while size >= 1024 and unit_index < len(units) - 1:
-        size /= 1024
-        unit_index += 1
-    return f"{size:.2f} {units[unit_index]}"
-
-
-def _stat_entry(p: Path) -> Dict[str, Any]:
-    st = p.stat()
-    return {
-        "path": str(p.relative_to(FS_ROOT)),
-        "type": "dir" if p.is_dir() else "file",
-        "size": _format_size(st.st_size),
-    }
-
-
-@tool("list_dir")
-def list_dir(
-    path: str = ".", pattern: Optional[str] = None, max_items: int = 200
+@tool("fs_query")
+def _fs_query(
+    op: Literal["list", "search", "read", "stat"],
+    items: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    """列出指定目录的内容，支持可选的 glob 模式过滤。
-    注意：路径必须在工作区目录内，使用相对路径如 '.'（当前目录）或 'subfolder'。
-    避免使用绝对路径（如 'C:\\'）或系统根 '/'
-    示例：path='.' 列出根目录；path='subfolder' 列出子目录。
     """
-    try:
-        base = _ensure_in_root(Path(path))
-        if not base.exists():
-            return {"ok": False, "error": f"不存在: {path}"}
-        if not base.is_dir():
-            return {"ok": False, "error": f"非目录: {path}"}
-        items = list(base.glob(pattern)) if pattern else list(base.iterdir())
-        items = items[:max_items]
-        return {"ok": True, "items": [_stat_entry(p) for p in items]}
-    except ValueError as e:
-        return {"ok": False, "error": str(e)}
-    except Exception as e:
-        logger.error(traceback.format_exc())
-        logger.error(f"读取目录失败: {e}")
-        return {"ok": False, "error": "读取目录失败"}
+    文件系统只读查询：list/search/stat/read
+    - 作用域：仅工作目录内（仅允许相对路径，不允许越界到工作目录外）
+    - 返回：{ ok, results, errors }
 
+    参数：
+    - op: 'list'|'search'|'stat'|'read'（必填）
+    - items: 操作参数列表，支持以下参数：
+        - path: 目标路径，仅支持相对路径（默认 '.'，list/search/stat/read 使用）
+        - pattern: 过滤模式，使用glob模式，比如`*.py`（仅 list/search 使用）
+        - max_items: 最大返回项数（默认 500，list/search 使用）
+        - max_bytes: 最大读取字节数（默认 2MB，read 使用）
 
-@tool("read_file")
-def read_file(
-    path: str, max_bytes: int = 2 * 1024 * 1024, encoding: str = "utf-8"
-) -> Dict[str, Any]:
-    """读取文本文件，默认最多读取 2MB，超过则截断。
-    注意：使用相对路径如 'file.txt' 或 'subfolder/file.txt'。
-    示例：path='script.py' 读取根目录下的文件。
+    模式：
+    - list: 列出 path 目录下的文件或文件夹信息（非递归），可配 pattern 过滤
+    - search: 在 path 下，递归搜索匹配的文件/目录，需提供 pattern
+    - read: 读取 path 指定的文本内容（按 UTF-8 尝试解码；超限截断）
+    - stat: 查看 path 指定的文件/目录属性（大小、类型、mtime 等）
+
+    示例
+    单个操作：items=[{...}]；多个操作：items=[{...}, {...}, ...]
+    - 列目录：{ op:"list", items:[{path:"."}] }
+    - 读文件：{ op:"read", items:[{path:"docs/readme.md", max_bytes:1000}, {path:"docs/another.md", max_bytes:1000}, {...}] }
+    - 查文件：{ op:"search", items:[{path:".", pattern:"*.py", max_items:100}] }
+    - 看属性：{ op:"stat", items:[{path:"src"}, {path:"data/input.csv"}, {...}] }
     """
-    try:
-        p = _ensure_in_root(Path(path))
-        if not p.exists():
-            return {"ok": False, "error": f"不存在: {path}"}
-        if p.is_dir():
-            return {"ok": False, "error": f"非文件: {path}"}
-        size = p.stat().st_size
-        with p.open("rb") as f:
-            data = f.read(max_bytes)
-        text = data.decode(encoding, errors="replace")
-        root = Path(FS_ROOT).expanduser().resolve()
-        return {
-            "ok": True,
-            "path": str(p.relative_to(root)),
-            "size": size,
-            "truncated": size > len(data),
-            "content": text,
-        }
-    except (ValueError, TypeError) as e:
-        return {"ok": False, "error": str(e)}
-    except Exception as e:
-        logger.error(traceback.format_exc())
-        logger.error(f"读取文件失败: {e}")
-        return {"ok": False, "error": "读取文件失败"}
+    DEFAULT_PATH = "."
+    DEFAULT_MAX_ITEMS = 500
+    DEFAULT_MAX_BYTES = 2 * 1024 * 1024
 
-
-@tool("write_file")
-def write_file(
-    path: str, content: str, overwrite: bool = False, encoding: str = "utf-8"
-) -> Dict[str, Any]:
-    """写入文本文件，默认不覆盖已存在文件。
-    注意：使用相对路径如 'newfile.txt' 或 'subfolder/newfile.txt'。父目录会自动创建。
-    示例：path='notes.txt' 在根目录创建文件；path='docs/todo.txt', overwrite=True 在子目录创建文件，覆盖同名文件。
-    """
     try:
-        p = _ensure_in_root(Path(path))
-        if p.exists() and not overwrite:
+        if not isinstance(items, list):
             return {
                 "ok": False,
-                "error": f"目标已存在: {path}（设置 overwrite=True 覆盖）",
+                "results": [],
+                "errors": [{"error": "items 必须为对象数组"}],
             }
-        p.parent.mkdir(parents=True, exist_ok=True)
-        with p.open("w", encoding=encoding, newline="") as f:
-            f.write(content)
-        root = Path(FS_ROOT).expanduser().resolve()
-        return {"ok": True, "path": str(p.relative_to(root))}
-    except (ValueError, TypeError) as e:
-        return {"ok": False, "error": str(e)}
-    except Exception as e:
-        logger.error(traceback.format_exc())
-        logger.error(f"写入文件失败: {e}")
-        return {"ok": False, "error": "写入文件失败"}
+        if len(items) == 0:
+            return {
+                "ok": False,
+                "results": [],
+                "errors": [{"error": "items 不能为空"}],
+            }
 
-
-@tool("move_path")
-def move_path(src: str, dst: str, overwrite: bool = False) -> Dict[str, Any]:
-    """移动或重命名文件/目录，支持覆盖选项。
-    示例：src='old.txt', dst='new.txt' 重命名文件。
-    """
-    try:
-        s, d = _ensure_in_root(Path(src)), _ensure_in_root(Path(dst))
-        if not s.exists():
-            return {"ok": False, "error": f"源不存在: {src}"}
-        if d.exists():
-            if not overwrite:
-                return {
-                    "ok": False,
-                    "error": f"目标已存在: {dst}（设置 overwrite=True 覆盖）",
-                }
-            shutil.rmtree(d) if d.is_dir() else d.unlink()
-        d.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(s), str(d))
-        return {
-            "ok": True,
-            "moved": {
-                "from": str(s.relative_to(FS_ROOT)),
-                "to": str(d.relative_to(FS_ROOT)),
-            },
-        }
-    except (ValueError, TypeError) as e:
-        return {"ok": False, "error": str(e)}
-    except Exception as e:
-        logger.error(traceback.format_exc())
-        logger.error(f"移动路径失败: {e}")
-        return {"ok": False, "error": "移动路径失败"}
-
-
-@tool("copy_path")
-def copy_path(src: str, dst: str, overwrite: bool = False) -> Dict[str, Any]:
-    """复制文件或目录，支持覆盖。
-    示例：src='file.txt', dst='backup/file.txt' 复制文件。
-    """
-    try:
-        s, d = _ensure_in_root(Path(src)), _ensure_in_root(Path(dst))
-        if not s.exists():
-            return {"ok": False, "error": f"源不存在: {src}"}
-        if d.exists():
-            if not overwrite:
-                return {
-                    "ok": False,
-                    "error": f"目标已存在: {dst}（设置 overwrite=True 覆盖）",
-                }
-            shutil.rmtree(d) if d.is_dir() else d.unlink()
-        d.parent.mkdir(parents=True, exist_ok=True)
-        if s.is_dir():
-            shutil.copytree(s, d)
-        else:
-            shutil.copy2(s, d)
-        root = Path(FS_ROOT).expanduser().resolve()
-        return {
-            "ok": True,
-            "copied": {
-                "from": str(s.relative_to(root)),
-                "to": str(d.relative_to(root)),
-            },
-        }
-    except (ValueError, TypeError) as e:
-        return {"ok": False, "error": str(e)}
-    except Exception as e:
-        logger.error(traceback.format_exc())
-        logger.error(f"复制失败: {e}")
-        return {"ok": False, "error": "复制失败"}
-
-
-@tool("make_dir")
-def make_dir(path: str, exist_ok: bool = True) -> Dict[str, Any]:
-    """创建目录（递归）。
-    注意：路径必须在工作区目录内，使用相对路径如 'newdir' 或 'parent/newdir'。
-    示例：path='logs' 在根目录创建目录。
-    """
-    try:
-        p = _ensure_in_root(Path(path))
-        p.mkdir(parents=True, exist_ok=exist_ok)
-        root = Path(FS_ROOT).expanduser().resolve()
-        return {"ok": True, "path": str(p.relative_to(root))}
-    except FileExistsError:
-        return {"ok": False, "error": f"目录已存在: {path}"}
-    except (ValueError, TypeError) as e:
-        return {"ok": False, "error": str(e)}
-    except Exception as e:
-        logger.error(traceback.format_exc())
-        logger.error(f"创建目录失败: {e}")
-        return {"ok": False, "error": "创建目录失败"}
-
-
-@tool("delete_path")
-def delete_path(path: str, recursive: bool = False) -> Dict[str, Any]:
-    """删除文件或目录；目录默认要求为空，recursive=True 递归删除。
-    警告：删除操作不可逆，请谨慎。
-    示例：path='temp.txt' 删除文件；path='tempdir', recursive=True 删除目录。
-    """
-    try:
-        p = _ensure_in_root(Path(path))
-        if not p.exists():
-            return {"ok": False, "error": f"不存在: {path}"}
-        if p.is_dir():
-            if recursive:
-                shutil.rmtree(p)
-            else:
-                try:
-                    p.rmdir()
-                except OSError:
-                    return {
-                        "ok": False,
-                        "error": f"目录非空: {path}（设置 recursive=True 递归删除）",
-                    }
-        else:
-            p.unlink()
-        return {"ok": True}
-    except (ValueError, TypeError) as e:
-        return {"ok": False, "error": str(e)}
-    except Exception as e:
-        logger.error(traceback.format_exc())
-        logger.error(f"删除失败: {e}")
-        return {"ok": False, "error": "删除失败"}
-
-
-@tool("search_glob")
-def search_glob(
-    path: str = ".", pattern: str = "**/*", max_items: int = 500
-) -> Dict[str, Any]:
-    """使用 glob 模式搜索文件/目录。
-    注意：起始路径必须在工作区目录内，使用相对路径如 '.' 或 'subfolder'。
-    示例：path='.', pattern='*.py' 搜索根目录下的 Python 文件。
-    """
-    try:
-        base = _ensure_in_root(Path(path))
-        if not base.exists():
-            return {"ok": False, "error": f"不存在: {path}"}
         results: List[Dict[str, Any]] = []
-        for p in base.glob(pattern):
-            try:
-                results.append(_stat_entry(p))
-            except Exception:
+        errors: List[Dict[str, Any]] = []
+
+        for idx, it in enumerate(items):
+            if not isinstance(it, dict):
+                errors.append(
+                    {"index": idx, "ok": False, "op": op, "error": "item 必须为对象"}
+                )
                 continue
-            if len(results) >= max_items:
-                break
-        return {"ok": True, "items": results}
-    except (ValueError, TypeError) as e:
-        return {"ok": False, "error": str(e)}
-    except Exception as e:
+
+            ipath = it.get("path", DEFAULT_PATH)
+            ipattern = it.get("pattern")
+            imax_items = it.get("max_items", DEFAULT_MAX_ITEMS)
+            imax_bytes = it.get("max_bytes", DEFAULT_MAX_BYTES)
+
+            # 基础校验
+            err: Optional[str] = None
+            if op == "search":
+                if not ipath:
+                    err = "search 需要 path"
+                elif not ipattern:
+                    err = "search 需要 pattern"
+            elif op in ("stat", "read"):
+                if not ipath:
+                    err = f"{op} 需要 path"
+
+            if err:
+                errors.append({"index": idx, "ok": False, "op": op, "error": err})
+                continue
+
+            r = _fs_query_operator.run(op, ipath, ipattern, imax_items, imax_bytes)
+            entry = {"index": idx, **r}
+            (results if r.get("ok") else errors).append(entry)
+
+        return {
+            "ok": len(errors) == 0,
+            "results": results,
+            "errors": errors,
+        }
+    except Exception:
         logger.error(traceback.format_exc())
-        logger.error(f"搜索失败: {e}")
-        return {"ok": False, "error": "搜索失败"}
+        return {
+            "ok": False,
+            "results": [],
+            "errors": [{"error": "fs_query 工具执行失败"}],
+        }
 
 
-fs_tools_list = [
-    list_dir,
-    read_file,
-    write_file,
-    move_path,
-    copy_path,
-    make_dir,
-    delete_path,
-    search_glob,
-]
+@tool("fs_apply")
+def _fs_apply(
+    op: Optional[Literal["write", "mkdir", "move", "copy", "delete"]],
+    items: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    文件系统变更：write/mkdir/move/copy/delete
+    - 作用域：仅工作目录内（仅允许相对路径，不允许越界到工作目录外）
+    - 返回：{ ok, results, errors }
+
+    参数：
+    - op: 'write'|'mkdir'|'move'|'copy'|'delete'（必填）
+    - items: 操作参数列表，支持以下参数：
+        - path: 目标路径，仅支持相对路径（默认 '.'，write/mkdir/delete 使用）
+        - content: 写入内容（write 使用）
+        - src/dst: 源/目标路径（move/copy 使用）
+        - overwrite: 是否覆盖已存在目标（默认 false，write/move/copy 使用）
+        - recursive: 是否递归删除（默认 false，delete 使用）
+
+    模式：
+    - write: 将 content 写入到 path；默认不覆盖已存在文件（可设 overwrite）
+    - mkdir: 创建目录；自动创建缺失的父级目录
+    - move:  将 src 移动到 dst；目标存在默认报错（可设 overwrite）
+    - copy:  将 src 复制到 dst；目标存在默认报错（可设 overwrite）
+    - delete: 删除 path；可以删除文件或空目录，递归删除需设 recursive
+
+    示例
+    单个操作：items=[{...}]；多个操作：items=[{...}, {...}, ...]
+    - 写文件：{ op:"write", items:[{ path:"out/a.txt", content:"hello", overwrite:true }] }
+    - 建目录：{ op:"mkdir", items:[{ path:"logs/archive" }] }
+    - 移动：  { op:"move",  items:[{ src:"a.txt", dst:"b.txt", overwrite:false }] }
+    - 复制：  { op:"copy",  items:[{ src:"src/app.py", dst:"bak/app.py", overwrite:false }] }
+    - 删除：  { op:"delete", items:[{ path:"tmp/cache", recursive:false }] }
+    - 批量：  { op:"copy",  items:[{ src:"a.txt", dst:"b.txt" }, { src:"README.md", dst:"build/README.md", overwrite:true }] }
+    """
+    DEFAULT_PATH = "."
+    DEFAULT_OVERWRITE = False
+    DEFAULT_RECURSIVE = False
+
+    try:
+        if not isinstance(items, list):
+            return {
+                "ok": False,
+                "results": [],
+                "errors": [{"error": "items 必须为对象数组"}],
+            }
+        if len(items) == 0:
+            return {
+                "ok": False,
+                "results": [],
+                "errors": [{"error": "items 不能为空"}],
+            }
+
+        results: List[Dict[str, Any]] = []
+        errors: List[Dict[str, Any]] = []
+
+        for idx, it in enumerate(items):
+            if not isinstance(it, dict):
+                errors.append(
+                    {"index": idx, "ok": False, "op": op, "error": "item 必须为对象"}
+                )
+                continue
+
+            ipath = it.get("path", DEFAULT_PATH)
+            icontent = it.get("content", "")
+            isrc = it.get("src", None)
+            idst = it.get("dst", None)
+            ioverwrite = bool(it.get("overwrite", DEFAULT_OVERWRITE))
+            irecursive = bool(it.get("recursive", DEFAULT_RECURSIVE))
+
+            r = _fs_apply_operator.run(
+                op, ipath, icontent, isrc, idst, ioverwrite, irecursive
+            )
+            entry = {"index": idx, **r}
+            (results if r.get("ok") else errors).append(entry)
+
+        return {
+            "ok": len(errors) == 0,
+            "results": results,
+            "errors": errors,
+        }
+    except Exception:
+        logger.error(traceback.format_exc())
+        return {
+            "ok": False,
+            "results": [],
+            "errors": [{"error": "fs_apply 工具执行失败"}],
+        }
+
+
+# 导出给 Agent 使用
+fs_tools_list = [_fs_query, _fs_apply]

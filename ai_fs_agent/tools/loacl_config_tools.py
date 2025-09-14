@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional
 
 from langchain.tools import tool
 from ai_fs_agent.config import user_config  # 直接引用用户配置（自动持久化）
-from ai_fs_agent.utils.check_workspace_dir import _check_workspace_dir
+from ai_fs_agent.utils.fs_utils import _check_workspace_dir
 
 
 @tool("check_workspace_dir")
