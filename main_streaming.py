@@ -35,7 +35,7 @@ def main():
                 continue
 
             is_use_tool = False
-            is_output = False
+            is_ai_output = False
             start = time.time()
 
             for token, _ in agent.stream(
@@ -44,30 +44,44 @@ def main():
                 config=config,
             ):
                 if isinstance(token, AIMessageChunk):
+                    if not token.content:
+                        # 空内容，表示AI已经回答完毕
+                        if is_ai_output:
+                            print("\n=== AI回答完成 ===")
+                            is_ai_output = False
+
                     # 规划阶段：工具调用参数流式输出
                     tool_call_chunks = token.tool_call_chunks
                     if tool_call_chunks:
                         if not is_use_tool:
                             print("\n=== 触发工具调用 ===")
                             is_use_tool = True
+                        if tool_call_chunks[-1].get("name"):
+                            print(
+                                f"工具名: {tool_call_chunks[-1]['name']}\n调用参数: ",
+                                end="",
+                                flush=True,
+                            )
                         print(tool_call_chunks[-1].get("args", ""), end="", flush=True)
 
                     # 工具调用完成（本次规划结束）
-                    if token.response_metadata.get("finish_reason") == "tool_calls":
+                    elif token.response_metadata.get("finish_reason") == "tool_calls":
                         is_use_tool = False
                         print("\n=== 工具调用完成 ===")
 
                     # 最终回答内容流式输出
-                    if token.content:
-                        if not is_output:
+                    elif token.content:
+                        if not is_ai_output:
                             print("\n=== AI 回答 ===")
-                            is_output = True
-                        print(token.content, end="", flush=True)
+                            is_ai_output = True
+                        print(token.content.strip(), end="", flush=True)
 
                     # 本轮最终回答结束
-                    if token.response_metadata.get("finish_reason") == "stop":
-                        is_output = False
-                        print("\n=== 本次回答完成 ===\n")
+                    elif token.response_metadata.get("finish_reason") == "stop":
+                        print("\n=== 本轮对话结束 ===\n")
+
+                    else:
+                        print(f"\n[未知 AIMessageChunk] {token}\n")
 
                 elif isinstance(token, ToolMessage):
                     # 工具执行结果
@@ -75,6 +89,7 @@ def main():
                     tool_output = token.content
                     print(f"\n=== 工具 {tool_name} 调用结果 ===")
                     print(format_tool_message_content(tool_output))
+                    print("=== 工具结果输出完成 ===")
 
             cost = time.time() - start
             print(f"(本轮耗时 {cost:.2f}s)")
