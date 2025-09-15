@@ -8,7 +8,7 @@ checkpointer = InMemorySaver()
 
 
 def build_local_config_agent():
-    """配置管理 Agent，可以管理本地项目配置，如工作区目录等。"""
+    """配置管理 Agent，可以管理本地项目配置，如工作目录等。"""
 
     system_prompt = """
 角色：

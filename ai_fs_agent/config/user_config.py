@@ -12,7 +12,7 @@ from ai_fs_agent.config.paths_config import USER_CONFIG_PATH
 class UserConfig(BaseModel):
     workspace_dir: Optional[Path] = Field(
         default=None,
-        description="工作区目录，用于智能体进行文件和文件夹的智能管理操作；若未设置，提醒用户设置",
+        description="工作目录，用于智能体进行文件和文件夹的智能管理操作；若未设置，提醒用户设置",
     )
 
     def _save_to_file(self):

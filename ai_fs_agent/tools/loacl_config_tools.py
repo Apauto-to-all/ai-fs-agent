@@ -8,45 +8,63 @@ from ai_fs_agent.utils.fs_utils import _check_workspace_dir
 
 @tool("check_workspace_dir")
 def check_workspace_dir() -> Dict[str, Any]:
-    """检查当前设置的工作区目录是否正常。"""
+    """检查当前设置的工作目录是否正常"""
     try:
         err = _check_workspace_dir(user_config.workspace_dir)
         if err:
             return {"ok": False, "error": err}
 
-        return {"ok": True, "message": "工作区目录正常"}
+        return {"ok": True, "message": "工作目录正常"}
     except Exception as e:
         return {"ok": False, "error": "工具报错，检测失败"}
 
 
 @tool("set_workspace_dir")
-def set_workspace_dir() -> Dict[str, Any]:
-    """设置项目的工作区（交互式），引导用户输入工作区目录"""
+def set_workspace_dir(path: str) -> Dict[str, Any]:
+    """设置项目的工作目录。传入绝对路径参数 path。"""
     try:
+        err = _check_workspace_dir(path)
+        if err:
+            return {"ok": False, "error": err}
+
+        # 成功，提醒用户进行二次确认
         max_attempts = 5
         for i in range(max_attempts):
-            path = input("请输入工作区目录的绝对路径：").strip()
-            if not path:
-                print("路径不能为空，请重新输入。")
-                continue
-            err = _check_workspace_dir(path)
-            if err:
-                print(f"无效路径: {err} 请重新输入。")
+            print(
+                f"请确认是否将工作目录设置为：{path}？（y or n，其他输入为自定义路径）"
+            )
+            confirm = input("请输入 (y/n/自定义路径)：").strip()
+            if confirm.lower() == "y":
+                pass
+
+            elif confirm.lower() == "n":
+                return {"ok": False, "message": "用户已取消设置工作目录"}
+
+            elif confirm == "":
+                print("输入不能为空，请重新输入。")
                 continue
 
-            # 成功，设置并返回
-            user_config.workspace_dir = path
-            return {"ok": True, "message": "工作区目录已设置"}
+            else:
+                err = _check_workspace_dir(confirm)
+                if err:
+                    print(f"错误：{err}，无效路径: {confirm} 请重新输入")
+                else:
+                    path = confirm
+                continue
+
+            user_config.workspace_dir = Path(path.strip()).expanduser()
+            return {
+                "ok": True,
+                "message": "工作目录已设置，最终路径隐藏（保护隐私）",
+            }
 
         # 循环结束但未成功
         return {
             "ok": False,
-            "error": f"用户输错 {max_attempts} 次，提醒用户输入正常路径",
+            "error": f"用户输错 {max_attempts} 次，已取消操作，提醒用户正常输入",
         }
-    except KeyboardInterrupt:
-        return {"ok": False, "error": "用户取消输入"}
-    except Exception as e:
-        return {"ok": False, "error": "工具报错，设置失败，提醒用户输入正常路径"}
+    except Exception:
+        return {"ok": False, "error": "工具报错，设置失败"}
 
 
 # 便于代理批量注册

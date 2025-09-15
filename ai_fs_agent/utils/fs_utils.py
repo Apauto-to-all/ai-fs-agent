@@ -10,7 +10,7 @@ def _check_workspace_dir(workspace_dir: Optional[Union[Path, str]] = None) -> st
     root_raw = workspace_dir
     # 配置检查
     if root_raw is None:
-        return "工作区目录未配置"
+        return "工作目录未配置"
     if isinstance(root_raw, Path):
         root = root_raw
     elif isinstance(root_raw, str):
@@ -20,15 +20,15 @@ def _check_workspace_dir(workspace_dir: Optional[Union[Path, str]] = None) -> st
         root_raw = root_raw.strip('"').strip("'")
         root = Path(root_raw)
     else:
-        return f"工作区目录类型不支持: {type(root_raw).__name__}"
+        return f"工作目录类型不支持: {type(root_raw).__name__}"
 
     # 路径合法性检查
     if not root.is_absolute():
-        return "工作区目录必须是绝对路径"
+        return "工作目录必须是绝对路径"
     if not root.exists():
-        return "工作区目录不存在"
+        return "工作目录不存在"
     if root.is_file():
-        return "工作区目录不是文件夹"
+        return "工作目录不是文件夹"
 
     return ""  # 正常
 
@@ -42,7 +42,7 @@ def _root() -> Path:
 
 
 def _ensure_in_root(p: Path) -> Path:
-    """确保路径在工作区内，并返回绝对规范化路径。"""
+    """确保路径在工作目录内，并返回绝对规范化路径。"""
     root = _root()
     p = (root / p).resolve() if not p.is_absolute() else p.resolve()
     if root not in p.parents and p != root:
@@ -51,7 +51,7 @@ def _ensure_in_root(p: Path) -> Path:
 
 
 def _rel(p: Path) -> str:
-    """返回相对工作区根的路径（统一使用 posix 分隔符）。"""
+    """返回相对工作目录根的路径（统一使用 posix 分隔符）。"""
     root = _root()
     return p.resolve().relative_to(root).as_posix()
 
