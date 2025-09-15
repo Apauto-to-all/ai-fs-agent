@@ -5,7 +5,7 @@ logger = logging.getLogger(__name__)
 import shutil
 from pathlib import Path
 from typing import Optional, Dict, Any, Literal
-from ai_fs_agent.utils.fs_utils import _ensure_in_root, _rel
+from ai_fs_agent.utils.fs.fs_utils import _ensure_in_root, _rel
 from send2trash import send2trash
 
 

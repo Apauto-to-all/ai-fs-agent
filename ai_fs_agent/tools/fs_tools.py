@@ -5,8 +5,8 @@ logger = logging.getLogger(__name__)
 
 from typing import Optional, List, Dict, Any, Literal
 from langchain.tools import tool
-from ai_fs_agent.utils.fs_query import _fs_query_operator
-from ai_fs_agent.utils.fs_apply import _fs_apply_operator
+from ai_fs_agent.utils.fs.fs_query import _fs_query_operator
+from ai_fs_agent.utils.fs.fs_apply import _fs_apply_operator
 
 
 @tool("fs_query")

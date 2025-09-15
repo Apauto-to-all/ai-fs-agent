@@ -4,7 +4,7 @@ import traceback
 logger = logging.getLogger(__name__)
 from pathlib import Path
 from typing import Optional, Dict, Any, Literal
-from ai_fs_agent.utils.fs_utils import _ensure_in_root, _rel, _stat_entry
+from ai_fs_agent.utils.fs.fs_utils import _ensure_in_root, _rel, _stat_entry
 
 
 class FsQueryOperator:
