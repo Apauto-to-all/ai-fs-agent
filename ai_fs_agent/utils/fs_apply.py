@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 from typing import Optional, Dict, Any, Literal
 from ai_fs_agent.utils.fs_utils import _ensure_in_root, _rel
+from send2trash import send2trash
 
 
 class FsApplyOperator:
@@ -99,20 +100,22 @@ class FsApplyOperator:
             if op == "delete":
                 if not p.exists():
                     return {"op": "delete", "ok": False, "error": f"不存在: {path}"}
-                if p.is_dir():
-                    if recursive:
-                        shutil.rmtree(p)
-                    else:
-                        try:
-                            p.rmdir()
-                        except OSError:
-                            return {
-                                "op": "delete",
-                                "ok": False,
-                                "error": f"目录非空: {path}（设置 recursive=True 递归删除）",
-                            }
-                else:
-                    p.unlink()
+
+                # 保留原有安全语义：非递归时不允许删除“非空目录”
+                if p.is_dir() and not recursive:
+                    try:
+                        next(p.iterdir())  # 有内容则会取到第一个条目
+                        return {
+                            "op": "delete",
+                            "ok": False,
+                            "error": f"目录非空: {path}（设置 recursive=True 递归删除至回收站）",
+                        }
+                    except StopIteration:
+                        # 空目录，允许删除
+                        pass
+
+                # 统一使用系统回收站删除，目录/文件均支持
+                send2trash(str(p))
                 return {"op": "delete", "ok": True, "path": _rel(p)}
 
             return {"op": op, "ok": False, "error": f"未知操作: {op}"}
