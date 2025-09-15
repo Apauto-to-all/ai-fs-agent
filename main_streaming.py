@@ -62,7 +62,10 @@ def main():
                                 end="",
                                 flush=True,
                             )
-                        print(tool_call_chunks[-1].get("args", ""), end="", flush=True)
+                        # 仅当 args 片段不为 None 时输出，避免打印 "None"
+                        args_piece = tool_call_chunks[-1].get("args", "")
+                        if args_piece:
+                            print(args_piece, end="", flush=True)
 
                     # 工具调用完成（本次规划结束）
                     elif token.response_metadata.get("finish_reason") == "tool_calls":
