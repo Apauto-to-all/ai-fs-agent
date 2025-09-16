@@ -7,7 +7,11 @@ from pathlib import Path
 from typing import Optional, Dict, Any, Literal
 from send2trash import send2trash
 from datetime import datetime
-from ai_fs_agent.utils.path_safety import ensure_in_workspace, rel_to_workspace
+from ai_fs_agent.utils.path_safety import (
+    ensure_in_workspace,
+    rel_to_workspace,
+    is_path_excluded,
+)
 from ai_fs_agent.utils.git.git_repo import _git_repo
 
 
@@ -33,6 +37,9 @@ class FsApplyOperator:
                 if not path:
                     return {"op": op, "ok": False, "error": f"{op} 需要提供 path"}
                 p = ensure_in_workspace(Path(path))
+                # 若目标位于排除列表，禁止更改
+                if is_path_excluded(p):
+                    return {"op": op, "ok": False, "error": "禁止AI更改该文件或目录"}
 
             if op in {"move", "copy"}:
                 if not src or not dst:
@@ -43,6 +50,9 @@ class FsApplyOperator:
                     }
                 s = ensure_in_workspace(Path(src))
                 d = ensure_in_workspace(Path(dst))
+                # 源或目标任一位于排除列表时，禁止操作
+                if is_path_excluded(s) or is_path_excluded(d):
+                    return {"op": op, "ok": False, "error": "禁止AI更改该文件或目录"}
 
             if op == "write":
                 if content is None:

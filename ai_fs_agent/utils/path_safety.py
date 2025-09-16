@@ -1,6 +1,23 @@
 from pathlib import Path
 from ai_fs_agent.utils.workspace import get_workspace_root
 
+DEFAULT_EXCLUDED_NAMES = {".git"}
+
+
+def is_path_excluded(p: Path) -> bool:
+    """
+    判断路径是否位于“排除列表”中（自身或任一父级名称命中）。
+    仅使用默认名称集 DEFAULT_EXCLUDED_NAMES。
+    """
+    names = {s.lower() for s in DEFAULT_EXCLUDED_NAMES}
+    try:
+        for part in p.parts:
+            if part.lower() in names:
+                return True
+        return False
+    except Exception:
+        return True
+
 
 def ensure_in_workspace(p: Path) -> Path:
     """

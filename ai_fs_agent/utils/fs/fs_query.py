@@ -4,7 +4,11 @@ import traceback
 logger = logging.getLogger(__name__)
 from pathlib import Path
 from typing import Optional, Dict, Any, Literal
-from ai_fs_agent.utils.path_safety import ensure_in_workspace, rel_to_workspace
+from ai_fs_agent.utils.path_safety import (
+    ensure_in_workspace,
+    rel_to_workspace,
+    is_path_excluded,
+)
 from ai_fs_agent.utils.file_info import stat_entry
 
 
@@ -26,12 +30,18 @@ class FsQueryOperator:
 
             base = ensure_in_workspace(Path(path))
 
+            # 禁止访问 排除列表 中的路径
+            if is_path_excluded(base):
+                return {"ok": False, "op": op, "error": "禁止AI访问该文件或目录"}
+
             if op == "list":
                 if not base.exists():
                     return {"ok": False, "op": op, "error": f"不存在: {path}"}
                 if not base.is_dir():
                     return {"ok": False, "op": op, "error": f"非目录: {path}"}
                 items_ = list(base.glob(pattern)) if pattern else list(base.iterdir())
+                # 排除 排除列表 中的路径
+                items_ = [p for p in items_ if not is_path_excluded(p)]
                 items_ = items_[: max(0, max_items)]
                 return {"ok": True, "op": op, "data": [stat_entry(p) for p in items_]}
 
@@ -42,6 +52,9 @@ class FsQueryOperator:
                     return {"ok": False, "op": op, "error": "search 需要提供 pattern"}
                 results = []
                 for p in base.glob(pattern):
+                    # 跳过 排除列表 中的路径
+                    if is_path_excluded(p):
+                        continue
                     try:
                         results.append(stat_entry(p))
                     except Exception:
