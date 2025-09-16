@@ -5,8 +5,10 @@ logger = logging.getLogger(__name__)
 import shutil
 from pathlib import Path
 from typing import Optional, Dict, Any, Literal
-from ai_fs_agent.utils.path_safety import ensure_in_workspace, rel_to_workspace
 from send2trash import send2trash
+from datetime import datetime
+from ai_fs_agent.utils.path_safety import ensure_in_workspace, rel_to_workspace
+from ai_fs_agent.utils.git.git_repo import _git_repo
 
 
 class FsApplyOperator:
@@ -136,6 +138,40 @@ class FsApplyOperator:
             logger.error(traceback.format_exc())
             return {"op": op, "ok": False, "error": "子操作执行失败"}
 
+    def _format_commit_message(
+        self,
+        op: str,
+        result: Dict[str, Any],
+    ) -> str:
+        """
+        统一的提交信息格式：
+        - 写文件:   AI：write path="a/b.txt"
+        - 新建目录: AI：mkdir path="a/b"
+        - 移动:     AI：move from="a/b.txt" to="c/d.txt"
+        - 复制:     AI：copy from="a/b.txt" to="c/d.txt"
+        - 删除:     AI：delete path="a/b.txt"
+        """
+        # 前缀
+        prefix = f"AI："
+        if op in ("write", "mkdir", "delete"):
+            p = result.get("path") or ""
+            if op == "write":
+                return f"{prefix}写入文件：{p}"
+            elif op == "mkdir":
+                return f"{prefix}新建目录：{p}"
+            elif op == "delete":
+                return f"{prefix}删除：{p}"
+
+        if op in ("move", "copy"):
+            src = result.get("from") or ""
+            dst = result.get("to") or ""
+            if op == "move":
+                return f"{prefix}移动：{src} -> {dst}"
+            elif op == "copy":
+                return f"{prefix}复制：{src} -> {dst}"
+
+        return f"{prefix}{op}"
+
     def run(
         self,
         op: Optional[Literal["write", "mkdir", "move", "copy", "delete"]],
@@ -150,9 +186,19 @@ class FsApplyOperator:
         try:
             if op is None:
                 return {"ok": False, "error": "缺少操作类型 op"}
-            return self._one(
+            # 进行AI操作前
+            if _git_repo.has_changes():
+                # 如果有变化，就提交一次
+                _git_repo.commit_all(
+                    message=f"Human：保存变更（{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}）"
+                )
+            result = self._one(
                 op, path, content, src, dst, overwrite, recursive, encoding
             )
+            # 成功则进行一次统一格式的 Git 提交
+            if result.get("ok", False):
+                _git_repo.commit_all(message=self._format_commit_message(op, result))
+            return result
         except (ValueError, TypeError) as e:
             return {"op": op, "ok": False, "error": str(e)}
         except Exception as e:
