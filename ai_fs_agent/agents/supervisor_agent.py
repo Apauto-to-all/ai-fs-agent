@@ -10,7 +10,7 @@ checkpointer = InMemorySaver()
 def build_supervisor_agent():
     """
     使用 create_supervisor 构建主管 Agent：负责根据用户意图在各子 Agent 之间进行路由调用。
-    成员代理：fs_agent（文件管理）、config_agent（配置管理）。
+    成员代理：fs_agent（文件管理）、config_agent（配置管理）、git_agent（Git 管理）。
     """
     system_prompt = """
 角色：
@@ -27,9 +27,10 @@ def build_supervisor_agent():
 - 涉及文件/配置的实际操作必须通过相应子代理完成
 - 所有文件类操作应限定在工作目录内（由子代理负责执行与校验）
 
-子代理列表：
-- fs_agent：文件/目录相关，可列目录、读写、移动、删除等（在工作目录下进行）
-- config_agent：项目配置相关，可校验/读取/更新配置（如工作目录）
+子代理列表与路由指引：
+- fs_agent：文件/目录相关，列目录、读写、移动、删除等（工作目录内）
+- config_agent：项目配置相关，校验/读取/更新配置（如工作目录）
+- git_agent：管理工作目录的 Git 版本状态；仅提供“查询最近提交”和“按引用回退”两项能力，主要用于防止 AI 操作失误带来的不可逆变更
 
 配置缺失处理：
 - 如果 fs_agent 调用失败，提示配置相关的错误，请调用 config_agent 处理配置问题
