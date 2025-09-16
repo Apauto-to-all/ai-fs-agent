@@ -4,7 +4,8 @@ import traceback
 logger = logging.getLogger(__name__)
 from pathlib import Path
 from typing import Optional, Dict, Any, Literal
-from ai_fs_agent.utils.fs.fs_utils import _ensure_in_root, _rel, _stat_entry
+from ai_fs_agent.utils.path_safety import ensure_in_workspace, rel_to_workspace
+from ai_fs_agent.utils.file_info import stat_entry
 
 
 class FsQueryOperator:
@@ -23,7 +24,7 @@ class FsQueryOperator:
             if op not in {"list", "search", "stat", "read"}:
                 return {"ok": False, "op": op, "error": f"不支持的操作: {op}"}
 
-            base = _ensure_in_root(Path(path))
+            base = ensure_in_workspace(Path(path))
 
             if op == "list":
                 if not base.exists():
@@ -32,7 +33,7 @@ class FsQueryOperator:
                     return {"ok": False, "op": op, "error": f"非目录: {path}"}
                 items_ = list(base.glob(pattern)) if pattern else list(base.iterdir())
                 items_ = items_[: max(0, max_items)]
-                return {"ok": True, "op": op, "data": [_stat_entry(p) for p in items_]}
+                return {"ok": True, "op": op, "data": [stat_entry(p) for p in items_]}
 
             if op == "search":
                 if not base.exists():
@@ -42,7 +43,7 @@ class FsQueryOperator:
                 results = []
                 for p in base.glob(pattern):
                     try:
-                        results.append(_stat_entry(p))
+                        results.append(stat_entry(p))
                     except Exception:
                         continue
                     if len(results) >= max(0, max_items):
@@ -52,7 +53,7 @@ class FsQueryOperator:
             if op == "stat":
                 if not base.exists():
                     return {"ok": False, "op": op, "error": f"不存在: {path}"}
-                return {"ok": True, "op": op, "data": _stat_entry(base)}
+                return {"ok": True, "op": op, "data": stat_entry(base)}
 
             if op == "read":
                 if not base.exists():
@@ -67,7 +68,7 @@ class FsQueryOperator:
                     "ok": True,
                     "op": op,
                     "data": {
-                        "path": _rel(base),
+                        "path": rel_to_workspace(base),
                         "size": size,
                         "truncated": size > len(data),
                         "content": text,

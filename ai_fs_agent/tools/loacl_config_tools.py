@@ -3,14 +3,14 @@ from typing import Dict, Any, Optional
 
 from langchain.tools import tool
 from ai_fs_agent.config import user_config  # 直接引用用户配置（自动持久化）
-from ai_fs_agent.utils.fs.fs_utils import _check_workspace_dir
+from ai_fs_agent.utils.workspace import check_workspace_dir
 
 
-@tool("check_workspace_dir")
-def check_workspace_dir() -> Dict[str, Any]:
+@tool("check_workspace")
+def check_workspace() -> Dict[str, Any]:
     """检查当前设置的工作目录是否正常"""
     try:
-        err = _check_workspace_dir(user_config.workspace_dir)
+        err = check_workspace_dir(user_config.workspace_dir)
         if err:
             return {"ok": False, "error": err}
 
@@ -23,7 +23,7 @@ def check_workspace_dir() -> Dict[str, Any]:
 def set_workspace_dir(path: str) -> Dict[str, Any]:
     """设置项目的工作目录。传入绝对路径参数 path。"""
     try:
-        err = _check_workspace_dir(path)
+        err = check_workspace_dir(path)
         if err:
             return {"ok": False, "error": err}
 
@@ -45,7 +45,7 @@ def set_workspace_dir(path: str) -> Dict[str, Any]:
                 continue
 
             else:
-                err = _check_workspace_dir(confirm)
+                err = check_workspace_dir(confirm)
                 if err:
                     print(f"错误：{err}，无效路径: {confirm} 请重新输入")
                 else:
@@ -68,4 +68,4 @@ def set_workspace_dir(path: str) -> Dict[str, Any]:
 
 
 # 便于代理批量注册
-config_tools_list = [set_workspace_dir, check_workspace_dir]
+config_tools_list = [set_workspace_dir, check_workspace]

@@ -5,7 +5,7 @@ logger = logging.getLogger(__name__)
 import shutil
 from pathlib import Path
 from typing import Optional, Dict, Any, Literal
-from ai_fs_agent.utils.fs.fs_utils import _ensure_in_root, _rel
+from ai_fs_agent.utils.path_safety import ensure_in_workspace, rel_to_workspace
 from send2trash import send2trash
 
 
@@ -30,7 +30,7 @@ class FsApplyOperator:
             if op in {"write", "mkdir", "delete"}:
                 if not path:
                     return {"op": op, "ok": False, "error": f"{op} 需要提供 path"}
-                p = _ensure_in_root(Path(path))
+                p = ensure_in_workspace(Path(path))
 
             if op in {"move", "copy"}:
                 if not src or not dst:
@@ -39,8 +39,8 @@ class FsApplyOperator:
                         "ok": False,
                         "error": f"{op} 需要提供 src 和 dst",
                     }
-                s = _ensure_in_root(Path(src))
-                d = _ensure_in_root(Path(dst))
+                s = ensure_in_workspace(Path(src))
+                d = ensure_in_workspace(Path(dst))
 
             if op == "write":
                 if content is None:
@@ -58,11 +58,11 @@ class FsApplyOperator:
                 p.parent.mkdir(parents=True, exist_ok=True)
                 with p.open("w", encoding=encoding, newline="") as f:
                     f.write(content)
-                return {"op": "write", "ok": True, "path": _rel(p)}
+                return {"op": "write", "ok": True, "path": rel_to_workspace(p)}
 
             if op == "mkdir":
                 p.mkdir(parents=True, exist_ok=True)
-                return {"op": "mkdir", "ok": True, "path": _rel(p)}
+                return {"op": "mkdir", "ok": True, "path": rel_to_workspace(p)}
 
             if op == "move":
                 if not s.exists():
@@ -77,7 +77,12 @@ class FsApplyOperator:
                     shutil.rmtree(d) if d.is_dir() else d.unlink()
                 d.parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(s), str(d))
-                return {"op": "move", "ok": True, "from": _rel(s), "to": _rel(d)}
+                return {
+                    "op": "move",
+                    "ok": True,
+                    "from": rel_to_workspace(s),
+                    "to": rel_to_workspace(d),
+                }
 
             if op == "copy":
                 if not s.exists():
@@ -95,7 +100,12 @@ class FsApplyOperator:
                     shutil.copytree(s, d)
                 else:
                     shutil.copy2(s, d)
-                return {"op": "copy", "ok": True, "from": _rel(s), "to": _rel(d)}
+                return {
+                    "op": "copy",
+                    "ok": True,
+                    "from": rel_to_workspace(s),
+                    "to": rel_to_workspace(d),
+                }
 
             if op == "delete":
                 if not p.exists():
@@ -116,7 +126,7 @@ class FsApplyOperator:
 
                 # 统一使用系统回收站删除，目录/文件均支持
                 send2trash(str(p))
-                return {"op": "delete", "ok": True, "path": _rel(p)}
+                return {"op": "delete", "ok": True, "path": rel_to_workspace(p)}
 
             return {"op": op, "ok": False, "error": f"未知操作: {op}"}
 
