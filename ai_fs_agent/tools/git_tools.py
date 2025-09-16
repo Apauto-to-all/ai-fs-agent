@@ -4,35 +4,10 @@ import traceback
 logger = logging.getLogger(__name__)
 
 from typing import Any, Dict, List
+import json
 from langchain.tools import tool
-from ai_fs_agent.utils.git import _git_repo, _git_history, RecentCommit
-
-
-def summarize_commit(commit: RecentCommit, max_files: int = 5) -> Dict[str, Any]:
-    """
-    将单个 RecentCommit 压缩为适合 AI 消费的概要信息（非列表）。
-    返回字段：
-    - short_id: 短哈希（便于展示）
-    - date: 提交时间（优先 committer_date，其次 author date）
-    - message: 提交标题（首行）
-    - stats: 汇总统计（files_changed/insertions/deletions）
-    - files: 精简文件列表（仅 path 与 status，最多 max_files 条）
-    """
-    # 精简文件列表
-    n = max_files if isinstance(max_files, int) and max_files > 0 else 0
-    files = [{"path": f.path, "status": f.status} for f in commit.files[:n]]
-
-    return {
-        "short_id": commit.short_id,
-        "date": (commit.committer_date or commit.date),
-        "message": commit.message,
-        "stats": {
-            "files_changed": commit.files_changed,
-            "insertions": commit.insertions,
-            "deletions": commit.deletions,
-        },
-        "files": files,
-    }
+from ai_fs_agent.utils.git import _git_repo, _git_history
+from ai_fs_agent.utils.git.git_utils import summarize_commit
 
 
 @tool("git_recent_commits")
@@ -84,7 +59,7 @@ def git_rollback(commit: str, clean_untracked: bool = False) -> Dict[str, Any]:
         max_attempts = 5
         details = summarize_commit(_git_history.commit_details(commit))
         print("即将回退到以下提交：")
-        print(details)
+        print(json.dumps(details, ensure_ascii=False, indent=2))
 
         for i in range(max_attempts):
             confirm = input("请输入 (y/n)：").strip()
