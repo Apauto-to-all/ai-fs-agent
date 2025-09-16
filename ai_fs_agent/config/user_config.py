@@ -14,6 +14,10 @@ class UserConfig(BaseModel):
         default=None,
         description="工作目录，用于智能体进行文件和文件夹的智能管理操作；若未设置，提醒用户设置",
     )
+    use_git: bool = Field(
+        default=True,
+        description="是否使用 Git 管理工作目录；若未安装 Git 或显式设为 False，则禁用 Git 功能",
+    )
 
     def _save_to_file(self):
         """保存设置到文件"""

@@ -8,6 +8,7 @@ import json
 from langchain.tools import tool
 from ai_fs_agent.utils.git import _git_repo, _git_history
 from ai_fs_agent.utils.git.git_utils import summarize_commit
+from ai_fs_agent.config import user_config
 
 
 @tool("git_recent_commits")
@@ -20,6 +21,9 @@ def git_recent_commits(limit: int = 5) -> Dict[str, Any]:
       - { ok, commits?: [...], error?: str }
     """
     try:
+        if not user_config.use_git:
+            return {"ok": False, "error": "Git 功能被禁用"}
+
         # 约束 limit 在 [1, 20]
         try:
             limit = int(limit)
@@ -48,6 +52,9 @@ def git_rollback(commit: str, clean_untracked: bool = False) -> Dict[str, Any]:
       - { ok, message?, error? }
     """
     try:
+        if not user_config.use_git:
+            return {"ok": False, "error": "Git 功能被禁用"}
+
         commit = commit.strip()
         if not isinstance(commit, str) or not commit:
             return {

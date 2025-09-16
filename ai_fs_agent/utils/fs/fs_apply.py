@@ -13,6 +13,7 @@ from ai_fs_agent.utils.path_safety import (
     is_path_excluded,
 )
 from ai_fs_agent.utils.git.git_repo import _git_repo
+from ai_fs_agent.config import user_config
 
 
 class FsApplyOperator:
@@ -196,18 +197,29 @@ class FsApplyOperator:
         try:
             if op is None:
                 return {"ok": False, "error": "缺少操作类型 op"}
-            # 进行AI操作前
-            if _git_repo.has_changes():
-                # 如果有变化，就提交一次
-                _git_repo.commit_all(
-                    message=f"Human：保存变更（{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}）"
-                )
+
+            try:
+                if user_config.use_git:
+                    # 如果有变化，就提交一次
+                    _git_repo.commit_all(
+                        message=f"Human：保存变更（{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}）"
+                    )
+            except Exception as e:
+                pass  # 忽略提交失败，继续执行变更
+
             result = self._one(
                 op, path, content, src, dst, overwrite, recursive, encoding
             )
-            # 成功则进行一次统一格式的 Git 提交
-            if result.get("ok", False):
-                _git_repo.commit_all(message=self._format_commit_message(op, result))
+
+            try:
+                # 启用 + 成功  > 进行一次 Git 提交
+                if user_config.use_git and result.get("ok", False):
+                    _git_repo.commit_all(
+                        message=self._format_commit_message(op, result)
+                    )
+            except Exception as e:
+                pass  # 忽略提交失败
+
             return result
         except (ValueError, TypeError) as e:
             return {"op": op, "ok": False, "error": str(e)}

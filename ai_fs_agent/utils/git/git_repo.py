@@ -10,6 +10,7 @@ import shutil
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from ai_fs_agent.utils.workspace import get_workspace_root
+from ai_fs_agent.config import user_config
 
 
 class EnsureRepoResult(BaseModel):
@@ -56,6 +57,7 @@ class GitRepo:
     def _check_git_available(self) -> None:
         """检查 git 可用性，若不可用则抛出异常。"""
         if shutil.which("git") is None:
+            user_config.use_git = False  # 自动禁用 Git 功能
             raise RuntimeError("未找到 git 可执行文件，请先安装并确保在 PATH 中。")
 
     def _run_git(self, args: List[str], check: bool = True) -> str:
