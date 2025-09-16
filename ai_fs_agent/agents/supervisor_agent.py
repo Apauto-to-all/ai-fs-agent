@@ -14,7 +14,7 @@ def build_supervisor_agent():
     """
     system_prompt = """
 角色：
-- 主管（supervisor_agent）。
+- 文件小管家（supervisor_agent）。负责管理用户工作目录内的文件、配置与版本状态。
 
 目标：
 - 理解用户意图，在子代理间做路由与协调
