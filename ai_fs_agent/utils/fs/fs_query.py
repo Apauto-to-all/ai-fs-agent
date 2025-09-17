@@ -13,16 +13,16 @@ from ai_fs_agent.utils.file_info import stat_entry
 
 
 class FsQueryOperator:
-    """只读查询：list/search/stat/read（单次，不支持批量）。"""
+    """只读查询：list/search/stat/read"""
 
     def _one(
         self,
-        op: str,
-        path: str,
-        pattern: Optional[str],
-        max_items: int,
-        max_bytes: int,
-        encoding: str,
+        op: Optional[Literal["list", "search", "stat", "read"]],
+        path: str = ".",
+        pattern: Optional[str] = None,
+        max_items: int = 500,
+        max_bytes: int = 2 * 1024 * 1024,
+        encoding: str = "utf-8",
     ) -> Dict[str, Any]:
         try:
             if op not in {"list", "search", "stat", "read"}:
@@ -99,16 +99,23 @@ class FsQueryOperator:
     def run(
         self,
         op: Optional[Literal["list", "search", "stat", "read"]],
-        path: str,
-        pattern: Optional[str],
-        max_items: int,
-        max_bytes: int,
+        path: str = ".",
+        pattern: Optional[str] = None,
+        max_items: int = 500,
+        max_bytes: int = 2 * 1024 * 1024,
     ) -> Dict[str, Any]:
         encoding: str = "utf-8"
         try:
             if op is None:
                 return {"ok": False, "error": "缺少操作类型 op"}
-            return self._one(op, path, pattern, max_items, max_bytes, encoding)
+            return self._one(
+                op=op,
+                path=path,
+                pattern=pattern,
+                max_items=max_items,
+                max_bytes=max_bytes,
+                encoding=encoding,
+            )
         except (ValueError, TypeError) as e:
             return {"ok": False, "op": op, "error": str(e)}
         except Exception:

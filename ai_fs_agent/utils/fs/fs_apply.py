@@ -17,18 +17,18 @@ from ai_fs_agent.config import user_config
 
 
 class FsApplyOperator:
-    """变更：write/mkdir/move/copy/delete（单次，不支持批量）。"""
+    """变更：write/mkdir/move/copy/delete"""
 
     def _one(
         self,
-        op: str,
-        path: Optional[str],
-        content: Optional[str],
-        src: Optional[str],
-        dst: Optional[str],
-        overwrite: bool,
-        recursive: bool,
-        encoding: str,
+        op: Optional[Literal["write", "mkdir", "move", "copy", "delete"]],
+        path: Optional[str] = ".",
+        content: Optional[str] = "",
+        src: Optional[str] = None,
+        dst: Optional[str] = None,
+        overwrite: bool = False,
+        recursive: bool = False,
+        encoding: str = "utf-8",
     ) -> Dict[str, Any]:
         try:
             if op not in {"write", "mkdir", "move", "copy", "delete"}:
@@ -186,12 +186,12 @@ class FsApplyOperator:
     def run(
         self,
         op: Optional[Literal["write", "mkdir", "move", "copy", "delete"]],
-        path: Optional[str],
-        content: Optional[str],
-        src: Optional[str],
-        dst: Optional[str],
-        overwrite: bool,
-        recursive: bool,
+        path: Optional[str] = ".",
+        content: Optional[str] = "",
+        src: Optional[str] = None,
+        dst: Optional[str] = None,
+        overwrite: bool = False,
+        recursive: bool = False,
     ) -> Dict[str, Any]:
         encoding: str = "utf-8"
         try:
@@ -208,7 +208,14 @@ class FsApplyOperator:
                 pass  # 忽略提交失败，继续执行变更
 
             result = self._one(
-                op, path, content, src, dst, overwrite, recursive, encoding
+                op=op,
+                path=path,
+                content=content,
+                src=src,
+                dst=dst,
+                overwrite=overwrite,
+                recursive=recursive,
+                encoding=encoding,
             )
 
             try:
