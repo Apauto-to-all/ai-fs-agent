@@ -214,3 +214,6 @@ data/
 
 # 排除测试文件夹
 z_temp_path/
+
+# 移除示例文件夹
+example/
