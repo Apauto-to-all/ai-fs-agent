@@ -209,5 +209,8 @@ __marimo__/
 # 排除本地配置文件夹
 local_config/
 
+# 排除本地数据文件夹
+data/
+
 # 排除测试文件夹
 z_temp_path/

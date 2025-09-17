@@ -1,12 +1,14 @@
-import os
-import json
-import time
-import threading
+import logging
+import traceback
+
+logger = logging.getLogger(__name__)
+
+from datetime import datetime
 import hashlib
-from typing import Dict, Optional, List, Any
+from typing import Dict, Optional, List
 from pydantic import BaseModel, Field
 from simhash import Simhash
-from ai_fs_agent.utils.workspace import get_workspace_root
+from ai_fs_agent.config.paths_config import LABEL_CACHE_PATH
 
 
 class LabelResult(BaseModel):
@@ -17,7 +19,25 @@ class LabelResult(BaseModel):
     labels: List[str] = Field(
         default_factory=list, description="多标签，主标签应出现在首位"
     )
-    ts: int = Field(default_factory=lambda: int(time.time()), description="结果时间戳")
+    ts: datetime = Field(default_factory=datetime.now, description="结果时间")
+
+
+class LabelCacheModel(BaseModel):
+    """管理 label_cache 的 BaseModel，自动保存到文件"""
+
+    label_cache: Dict[str, LabelResult] = Field(
+        default_factory=dict, description="标签缓存字典"
+    )
+
+    def _save_to_file(self):
+        """保存缓存到文件"""
+        try:
+            LABEL_CACHE_PATH.write_text(
+                self.model_dump_json(by_alias=True, indent=4), encoding="utf-8"
+            )
+            logger.info("文件标签缓存，已保存到文件")
+        except Exception as e:
+            logger.error(f"保存缓存失败: {e}")
 
 
 class ContentLabelService:
@@ -27,16 +47,16 @@ class ContentLabelService:
     """
 
     def __init__(self):
-        ws = get_workspace_root()
-        base_dir = os.path.join(ws or os.getcwd(), ".ai_fs_agent", "classify")
-        os.makedirs(base_dir, exist_ok=True)
+        if not LABEL_CACHE_PATH.exists():
+            self.label_cache_model = LabelCacheModel()
+            self.label_cache_model._save_to_file()
+        else:
+            self.label_cache_model = LabelCacheModel.model_validate_json(
+                LABEL_CACHE_PATH.read_text(encoding="utf-8")
+            )
 
-        self._cache_path = os.path.join(base_dir, "label_cache.json")
-        self._cache_lock = threading.RLock()
-        self._cache: Dict[str, LabelResult] = {}
         # 近似匹配阈值（可调）：≤8 视为近重复，直接复用标签
         self._simhash_hamming_threshold = 8
-        self._load_cache()
 
     # 公开 API -----------------------
 
@@ -57,24 +77,25 @@ class ContentLabelService:
         approx = self._find_by_simhash(sh, self._simhash_hamming_threshold)
         if approx:
             # 复用旧标签，但为新 content_id 建立缓存记录；保留本次 simhash
-            res = self._build_result(content_id=cid, simhash64=sh, labels=approx.labels)
-            self._save_to_cache(res)
+            res = LabelResult(content_id=cid, simhash64=sh, labels=approx.labels)
+            self.label_cache_model.label_cache[cid] = res
+            self.label_cache_model._save_to_file()
             return res
 
         # 3) TODO：调用大模型生成标签（此处占位）
         labels = ["未分类"]
 
-        res = self._build_result(content_id=cid, simhash64=sh, labels=labels)
-        self._save_to_cache(res)
+        res = LabelResult(content_id=cid, simhash64=sh, labels=labels)
+        self.label_cache_model.label_cache[cid] = res
+        self.label_cache_model._save_to_file()
         return res
 
     def get_label_by_id(self, content_id: str) -> Optional[LabelResult]:
-        with self._cache_lock:
-            hit = self._cache.get(content_id)
-            if not hit:
-                return None
-            # 返回副本，防止外部修改内部对象
-            return hit.model_copy()
+        hit = self.label_cache_model.label_cache.get(content_id)
+        if not hit:
+            return None
+        # 返回副本，防止外部修改内部对象
+        return hit.model_copy()
 
     # 内部实现 -----------------------
 
@@ -98,63 +119,17 @@ class ContentLabelService:
         """
         best: Optional[LabelResult] = None
         best_dist = 65  # 大于 64 保证首次替换
-        with self._cache_lock:
-            for item in self._cache.values():
-                if item.simhash64 is None:
-                    continue
-                # 计算64位整数的海明距离
-                x = sh ^ item.simhash64
-                d = x.bit_count() if hasattr(x, "bit_count") else bin(x).count("1")
-                if d < best_dist:
-                    best_dist = d
-                    best = item
-                    if best_dist == 0:
-                        break
+        for item in self.label_cache_model.label_cache.values():
+            if item.simhash64 is None:
+                continue
+            # 计算64位整数的海明距离
+            x = sh ^ item.simhash64
+            d = x.bit_count() if hasattr(x, "bit_count") else bin(x).count("1")
+            if d < best_dist:
+                best_dist = d
+                best = item
+                if best_dist == 0:
+                    break
         if best and best_dist <= max_hamming:
             return best
         return None
-
-    def _build_result(
-        self, content_id: str, simhash64: Optional[int], labels: List[str]
-    ) -> LabelResult:
-        """构建 LabelResult 对象"""
-        return LabelResult(
-            content_id=content_id,
-            simhash64=simhash64,
-            labels=labels,
-            ts=int(time.time()),
-        )
-
-    # 缓存 -----------------------
-
-    def _load_cache(self) -> None:
-        with self._cache_lock:
-            if not os.path.exists(self._cache_path):
-                self._cache = {}
-                return
-            try:
-                with open(self._cache_path, "r", encoding="utf-8") as f:
-                    raw = json.load(f)
-                cache: Dict[str, LabelResult] = {}
-                for k, v in raw.items():
-                    try:
-                        cache[k] = LabelResult(**v)
-                    except Exception:
-                        continue
-                self._cache = cache
-            except Exception:
-                self._cache = {}
-
-    def _save_to_cache(self, result: LabelResult) -> None:
-        with self._cache_lock:
-            self._cache[result.content_id] = result
-            tmp = self._cache_path + ".tmp"
-            os.makedirs(os.path.dirname(self._cache_path), exist_ok=True)
-
-            def _dump(m: LabelResult) -> Dict[str, Any]:
-                return m.model_dump() if hasattr(m, "model_dump") else m.dict()
-
-            serializable = {k: _dump(v) for k, v in self._cache.items()}
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(serializable, f, ensure_ascii=False, indent=2)
-            os.replace(tmp, self._cache_path)
