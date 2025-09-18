@@ -18,6 +18,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "send2trash" },
     { name = "simhash" },
+    { name = "structured-output-prompt" },
 ]
 
 [package.dev-dependencies]
@@ -35,6 +36,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.1.1" },
     { name = "send2trash", specifier = ">=1.8.3" },
     { name = "simhash", specifier = ">=2.1.2" },
+    { name = "structured-output-prompt", specifier = ">=1.0.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -1244,6 +1246,18 @@ source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
 sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/6d/e6/21ccce3262dd4889aa3332e5a119a3491a95e8f60939870a3a035aabac0d/soupsieve-2.8.tar.gz", hash = "sha256:e2dd4a40a628cb5f28f6d4b0db8800b8f581b65bb380b97de22ba5ca8d72572f", size = 103472, upload-time = "2025-08-27T15:39:51.78Z" }
 wheels = [
     { url = "https://pypi.tuna.tsinghua.edu.cn/packages/14/a0/bb38d3b76b8cae341dad93a2dd83ab7462e6dbcdd84d43f54ee60a8dc167/soupsieve-2.8-py3-none-any.whl", hash = "sha256:0cc76456a30e20f5d7f2e14a98a4ae2ee4e5abdc7c5ea0aafe795f344bc7984c", size = 36679, upload-time = "2025-08-27T15:39:50.179Z" },
+]
+
+[[package]]
+name = "structured-output-prompt"
+version = "1.0.0"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+dependencies = [
+    { name = "pydantic" },
+]
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/4b/6a/58fa90ef659ad6ec6329938d22441b989fbcfa6d8b3c81ee45f1ba5d6cd9/structured_output_prompt-1.0.0.tar.gz", hash = "sha256:dd92cc5ae5f990d1353bdf3fb6047fd9f1a987ab07d7ea6050f21db523d82d69", size = 8636, upload-time = "2025-09-09T06:46:19.808Z" }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/3d/ae/7ba41b3d9d2d166f9b6d5f1fff246a864d35d8a38d426bb3e4c957f88bd5/structured_output_prompt-1.0.0-py3-none-any.whl", hash = "sha256:1910c5f592d73d95fe0ccbd3b79c60226da1c3971f0b9c65fb905c9a21c0ff87", size = 9437, upload-time = "2025-09-09T06:46:18.296Z" },
 ]
 
 [[package]]
