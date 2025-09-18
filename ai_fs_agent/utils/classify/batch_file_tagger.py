@@ -1,14 +1,15 @@
 import logging
+
+logger = logging.getLogger(__name__)
+
 from typing import List, Iterable, Tuple
 from langchain_core.messages import SystemMessage, HumanMessage
 from pydantic import BaseModel, Field
 
 from ai_fs_agent.utils.ingest.file_loader import FileLoader
 from ai_fs_agent.utils.ingest.text_processor import TextProcessor
-from ai_fs_agent.agents.tagging_llm import TaggingLLM, TagListModel
+from ai_fs_agent.utils.classify.tagging_llm import TaggingLLM, TagListModel
 from ai_fs_agent.utils.classify.tag_service import TagCacheService, TagRecord
-
-logger = logging.getLogger(__name__)
 
 
 class PreparedFileSample(BaseModel):
