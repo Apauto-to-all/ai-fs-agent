@@ -1,7 +1,5 @@
 import logging
-from typing import Dict, Iterable, Optional, List
 from pathlib import Path
-from markitdown import MarkItDown
 from ai_fs_agent.utils.path_safety import ensure_in_workspace, is_path_excluded
 
 logger = logging.getLogger(__name__)
@@ -47,21 +45,10 @@ class FileLoader:
             return self._read_office_file(abs_p)
         raise ValueError(f"暂不支持的文件类型: {ext} ({path})")
 
-    def load_many(self, paths: Iterable[str]) -> Dict[str, str]:
-        """
-        批量加载，返回 {path: text}。读取失败的条目不会出现在结果中。
-        """
-        out: Dict[str, str] = {}
-        for p in paths:
-            try:
-                out[p] = self.load_text(p)
-            except Exception as e:
-                logger.warning(f"读取失败: {p}: {e}")
-        return out
-
     # ---------- 各类型具体读取 ----------
 
     def _read_text_file(self, path: Path) -> str:
+        """读取纯文本文件，返回字符串"""
         # 多编码回退策略，尽量读出文本
         try:
             with open(path, "r", encoding="utf-8", errors="ignore") as f:
@@ -70,6 +57,9 @@ class FileLoader:
             raise Exception(f"读取文本文件失败: {path}: {e}")
 
     def _read_office_file(self, path: Path) -> str:
+        """读取 Office 文档，返回 Markdown 格式内容"""
+        from markitdown import MarkItDown
+
         md = MarkItDown()
         result = md.convert(path)
         return result.text_content

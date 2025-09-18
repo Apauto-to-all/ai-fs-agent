@@ -1,9 +1,12 @@
 import re
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import (
+    RecursiveCharacterTextSplitter,
+    CharacterTextSplitter,
+)
 from pydantic import BaseModel, Field
 
 
-class LabelingSections(BaseModel):
+class ThreePartSections(BaseModel):
     front: str = Field(default="")
     middle: str = Field(default="")
     back: str = Field(default="")
@@ -58,10 +61,47 @@ class TextProcessor:
         return t
 
     # ---------- 分割（使用 LangChain）----------
+    def split_for_tag_cache(self, text: str) -> ThreePartSections:
+        """
+        快速切割文本为前、中、后三段，使用 CharacterTextSplitter 按长度分割。
+        总字符数约 max_total_chars，适合大文本快速处理。
+        返回 LabelingSections 实例。
+        """
+        # 先 normalize 文本（压缩空白、去除首尾空白）
+        normalized_text = self.normalize(text, squeeze_ws=True, strip=True)
+
+        # 设置最大字符数
+        max_total_chars = 1500
+
+        # 短文本：直接三等分
+        if len(normalized_text) <= max_total_chars:
+            third = len(normalized_text) // 3
+            front = normalized_text[:third]
+            middle = normalized_text[third : 2 * third]
+            back = normalized_text[2 * third :]
+            return ThreePartSections(front=front, middle=middle, back=back)
+
+        # 使用 CharacterTextSplitter 按固定长度分割
+        chunk_size = max_total_chars // 3
+        splitter = CharacterTextSplitter(
+            chunk_size=chunk_size,
+            chunk_overlap=0,  # 无重叠，快速
+        )
+        chunks = splitter.split_text(normalized_text)
+
+        if not chunks:
+            return ThreePartSections()
+
+        # 获取前、中、后块
+        front = chunks[0] if len(chunks) > 0 else ""
+        middle = chunks[len(chunks) // 2] if len(chunks) > 1 else ""
+        back = chunks[-1] if len(chunks) > 0 else ""
+
+        return ThreePartSections(front=front, middle=middle, back=back)
 
     def split_for_labeling(
         self, text: str, max_total_chars: int = 1500
-    ) -> LabelingSections:
+    ) -> ThreePartSections:
         """
         按文本结构切割文本，获取前中后各1个部分，用于打标签。
         使用 RecursiveCharacterTextSplitter，按段落和句子递归分割。
@@ -78,7 +118,7 @@ class TextProcessor:
             front = normalized_text[:third]
             middle = normalized_text[third : 2 * third]
             back = normalized_text[2 * third :]
-            return LabelingSections(front=front, middle=middle, back=back)
+            return ThreePartSections(front=front, middle=middle, back=back)
 
         # 动态 计算 chunk_size，确保前中后总字符数约为 max_total_chars
         dynamic_chunk_size = max_total_chars // 3
@@ -105,7 +145,7 @@ class TextProcessor:
         chunks = splitter.split_text(normalized_text)
 
         if not chunks:
-            return LabelingSections()  # 使用默认值
+            return ThreePartSections()  # 使用默认值
 
         # 获取前1个（字符串）
         front = chunks[0] if len(chunks) > 0 else ""
@@ -120,7 +160,7 @@ class TextProcessor:
         # 获取后1个（字符串）
         back = chunks[-1] if total >= 1 else ""
 
-        return LabelingSections(
+        return ThreePartSections(
             front=front,
             middle=middle,
             back=back,
