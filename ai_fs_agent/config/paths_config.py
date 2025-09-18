@@ -18,7 +18,7 @@ LOGS_DIR = PROJECT_ROOT / "logs"
 LLM_CONFIG_PATH = LOCAL_CONFIG_DIR / "llm_models.toml"
 ENV_PATH = LOCAL_CONFIG_DIR / ".env"
 USER_CONFIG_PATH = LOCAL_CONFIG_DIR / "user_config.json"
-LABEL_CACHE_PATH = DATA_DIR / "label_cache.json"
+TAGS_CACHE_PATH = DATA_DIR / "tags_cache.json"
 
 
 def ensure_directories() -> None:
