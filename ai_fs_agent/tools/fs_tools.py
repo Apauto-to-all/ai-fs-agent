@@ -24,8 +24,8 @@ def _fs_query(
     - items: 操作参数列表，支持以下参数：
         - path: 目标路径，仅支持相对路径（默认 '.'，list/search/stat/read 使用）
         - pattern: 过滤模式，使用glob模式，比如`*.py`（仅 list/search 使用）
-        - max_items: 最大返回项数（默认 500，list/search 使用）
-        - max_bytes: 最大读取字节数（默认 2MB，read 使用）
+        - max_items: 最大返回项数（默认 200，list/search 使用）
+        - max_bytes: 最大读取字节数（默认 2KB，read 使用）
 
     glob模式语法说明，理解用户的要求，合理使用：
     - `*`：匹配任意数量字符（不含路径分隔符）
@@ -49,7 +49,7 @@ def _fs_query(
     - 递归搜索：{ op:"search", items:[{path:"文档", pattern:"**/*.txt", max_items:200}] }
     """
     DEFAULT_PATH = "."
-    DEFAULT_MAX_ITEMS = 500
+    DEFAULT_MAX_ITEMS = 200
     DEFAULT_MAX_BYTES = 2 * 1024
 
     try:

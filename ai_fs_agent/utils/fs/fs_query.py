@@ -101,7 +101,7 @@ class FsQueryOperator:
         op: Optional[Literal["list", "search", "stat", "read"]],
         path: str = ".",
         pattern: Optional[str] = None,
-        max_items: int = 500,
+        max_items: int = 200,
         max_bytes: int = 2 * 1024,
     ) -> Dict[str, Any]:
         encoding: str = "utf-8"
