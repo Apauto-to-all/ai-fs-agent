@@ -6,12 +6,14 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from ai_fs_agent.agents.fs_agent import build_fs_agent
 from ai_fs_agent.agents.local_config_agent import build_local_config_agent
 from ai_fs_agent.agents.git_agent import build_git_agent
+from ai_fs_agent.agents.classify_agent import build_classify_agent
 
 # 子 Agent 注册表：新增分类等子 Agent 时在此补充
 AGENT_REGISTRY = {
     "fs_agent": build_fs_agent,
     "config_agent": build_local_config_agent,
     "git_agent": build_git_agent,
+    "classify_agent": build_classify_agent,
 }
 
 
@@ -28,8 +30,8 @@ def delegate_to_agent(
     instruction: str,
 ) -> str:
     """
-    将一个清晰的子任务委托给指定子 Agent 执行（隔离上下文）。
-    - agent: 目标子 Agent 名称（'fs_agent' | 'config_agent' | 'git_agent'）
+    将一个清晰的子任务委托给指定子 Agent 执行（隔离上下文）
+    - agent: 目标子 Agent 名称（'fs_agent' | 'config_agent' | 'git_agent' | 'classify_agent'）
     - instruction: 明确的任务说明（子 Agent 需要做什么）
     """
     if agent not in AGENT_REGISTRY:
