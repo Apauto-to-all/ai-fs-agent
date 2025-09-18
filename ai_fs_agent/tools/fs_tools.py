@@ -122,27 +122,25 @@ def _fs_apply(
         - path: 目标路径，仅支持相对路径（默认 '.'，write/mkdir/delete 使用）
         - content: 写入内容（write 使用）
         - src/dst: 源/目标路径（move/copy 使用）
-        - overwrite: 是否覆盖已存在目标（默认 false，write/move/copy 使用）
         - recursive: 是否递归删除（默认 false，delete 使用）
 
     模式：
-    - write: 将 content 写入到 path；默认不覆盖已存在文件（可设 overwrite）
+    - write: 将 content 写入到 path；如果目标存在，自动重命名防止覆盖
     - mkdir: 创建目录；自动创建缺失的父级目录
-    - move:  将 src 移动到 dst；目标存在默认报错（可设 overwrite）
-    - copy:  将 src 复制到 dst；目标存在默认报错（可设 overwrite）
+    - move:  将 src 移动到 dst；目标存在自动重命名，防止覆盖
+    - copy:  将 src 复制到 dst；目标存在自动重命名，防止覆盖
     - delete: 删除 path；可以删除文件或空目录，递归删除需设 recursive
 
     示例
     单个操作：items=[{...}]；多个操作：items=[{...}, {...}, ...]
-    - 写文件：{ op:"write", items:[{ path:"out/a.txt", content:"hello", overwrite:true }] }
+    - 写文件：{ op:"write", items:[{ path:"out/a.txt", content:"hello" }] }
     - 建目录：{ op:"mkdir", items:[{ path:"logs/archive" }] }
-    - 移动：  { op:"move",  items:[{ src:"a.txt", dst:"b.txt", overwrite:false }] }
-    - 复制：  { op:"copy",  items:[{ src:"src/app.py", dst:"bak/app.py", overwrite:false }] }
+    - 移动：  { op:"move",  items:[{ src:"a.txt", dst:"b.txt" }] }
+    - 复制：  { op:"copy",  items:[{ src:"src/app.py", dst:"bak/app.py" }] }
     - 删除：  { op:"delete", items:[{ path:"tmp/cache", recursive:false }] }
-    - 批量：  { op:"copy",  items:[{ src:"a.txt", dst:"b.txt" }, { src:"README.md", dst:"build/README.md", overwrite:true }] }
+    - 批量：  { op:"copy",  items:[{ src:"a.txt", dst:"b.txt" }, { src:"README.md", dst:"build/README.md" }] }
     """
     DEFAULT_PATH = "."
-    DEFAULT_OVERWRITE = False
     DEFAULT_RECURSIVE = False
 
     try:
@@ -173,11 +171,15 @@ def _fs_apply(
             icontent = it.get("content", "")
             isrc = it.get("src", None)
             idst = it.get("dst", None)
-            ioverwrite = bool(it.get("overwrite", DEFAULT_OVERWRITE))
             irecursive = bool(it.get("recursive", DEFAULT_RECURSIVE))
 
             r = _fs_apply_operator.run(
-                op, ipath, icontent, isrc, idst, ioverwrite, irecursive
+                op=op,
+                path=ipath,
+                content=icontent,
+                src=isrc,
+                dst=idst,
+                recursive=irecursive,
             )
             entry = {"index": idx, **r}
             (results if r.get("ok") else errors).append(entry)

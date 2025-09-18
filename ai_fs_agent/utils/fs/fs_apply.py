@@ -19,6 +19,20 @@ from ai_fs_agent.config import user_config
 class FsApplyOperator:
     """变更：write/mkdir/move/copy/delete"""
 
+    def _generate_unique_name(self, d: Path) -> Path:
+        """生成唯一目标名称，如果目标存在，添加后缀 (1), (2) 等"""
+        if not d.exists():
+            return d
+        stem = d.stem  # 文件名无扩展名
+        suffix = d.suffix  # 扩展名
+        counter = 1
+        new_d = d
+        while new_d.exists():
+            new_name = f"{stem}({counter}){suffix}"
+            new_d = d.parent / new_name
+            counter += 1
+        return new_d
+
     def _one(
         self,
         op: Optional[Literal["write", "mkdir", "move", "copy", "delete"]],
@@ -26,7 +40,6 @@ class FsApplyOperator:
         content: Optional[str] = "",
         src: Optional[str] = None,
         dst: Optional[str] = None,
-        overwrite: bool = False,
         recursive: bool = False,
         encoding: str = "utf-8",
     ) -> Dict[str, Any]:
@@ -62,12 +75,8 @@ class FsApplyOperator:
                         "ok": False,
                         "error": "write 需要提供 content",
                     }
-                if p.exists() and not overwrite:
-                    return {
-                        "op": "write",
-                        "ok": False,
-                        "error": f"目标已存在: {path}（设置 overwrite=True 覆盖）",
-                    }
+                # 若目标存在，禁止覆盖，统一重命名
+                p = self._generate_unique_name(p)
                 p.parent.mkdir(parents=True, exist_ok=True)
                 with p.open("w", encoding=encoding, newline="") as f:
                     f.write(content)
@@ -80,14 +89,8 @@ class FsApplyOperator:
             if op == "move":
                 if not s.exists():
                     return {"op": "move", "ok": False, "error": f"源不存在: {src}"}
-                if d.exists():
-                    if not overwrite:
-                        return {
-                            "op": "move",
-                            "ok": False,
-                            "error": f"目标已存在: {dst}（设置 overwrite=True 覆盖）",
-                        }
-                    shutil.rmtree(d) if d.is_dir() else d.unlink()
+                # 禁止覆盖，统一重命名目标
+                d = self._generate_unique_name(d)
                 d.parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(s), str(d))
                 return {
@@ -100,14 +103,8 @@ class FsApplyOperator:
             if op == "copy":
                 if not s.exists():
                     return {"op": "copy", "ok": False, "error": f"源不存在: {src}"}
-                if d.exists():
-                    if not overwrite:
-                        return {
-                            "op": "copy",
-                            "ok": False,
-                            "error": f"目标已存在: {dst}（设置 overwrite=True 覆盖）",
-                        }
-                    shutil.rmtree(d) if d.is_dir() else d.unlink()
+                # 禁止覆盖，统一重命名目标
+                d = self._generate_unique_name(d)
                 d.parent.mkdir(parents=True, exist_ok=True)
                 if s.is_dir():
                     shutil.copytree(s, d)
@@ -147,7 +144,7 @@ class FsApplyOperator:
             return {"op": op, "ok": False, "error": str(e)}
         except Exception:
             logger.error(traceback.format_exc())
-            return {"op": op, "ok": False, "error": "子操作执行失败"}
+            return {"op": op, "ok": False, "error": "文件操作执行失败"}
 
     def _format_commit_message(
         self,
@@ -190,8 +187,8 @@ class FsApplyOperator:
         content: Optional[str] = "",
         src: Optional[str] = None,
         dst: Optional[str] = None,
-        overwrite: bool = False,
         recursive: bool = False,
+        is_use_git: bool = True,
     ) -> Dict[str, Any]:
         encoding: str = "utf-8"
         try:
@@ -199,7 +196,7 @@ class FsApplyOperator:
                 return {"ok": False, "error": "缺少操作类型 op"}
 
             try:
-                if user_config.use_git:
+                if user_config.use_git and is_use_git:
                     # 如果有变化，就提交一次
                     _git_repo.commit_all(
                         message=f"Human：保存变更（{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}）"
@@ -213,14 +210,13 @@ class FsApplyOperator:
                 content=content,
                 src=src,
                 dst=dst,
-                overwrite=overwrite,
                 recursive=recursive,
                 encoding=encoding,
             )
 
             try:
                 # 启用 + 成功  > 进行一次 Git 提交
-                if user_config.use_git and result.get("ok", False):
+                if user_config.use_git and result.get("ok", False) and is_use_git:
                     _git_repo.commit_all(
                         message=self._format_commit_message(op, result)
                     )
