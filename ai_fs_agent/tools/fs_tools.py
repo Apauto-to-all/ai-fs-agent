@@ -42,7 +42,7 @@ def _fs_query(
     """
     DEFAULT_PATH = "."
     DEFAULT_MAX_ITEMS = 500
-    DEFAULT_MAX_BYTES = 2 * 1024 * 1024
+    DEFAULT_MAX_BYTES = 2 * 1024
 
     try:
         if not isinstance(items, list):

@@ -21,7 +21,7 @@ class FsQueryOperator:
         path: str = ".",
         pattern: Optional[str] = None,
         max_items: int = 500,
-        max_bytes: int = 2 * 1024 * 1024,
+        max_bytes: int = 2 * 1024,
         encoding: str = "utf-8",
     ) -> Dict[str, Any]:
         try:
@@ -102,7 +102,7 @@ class FsQueryOperator:
         path: str = ".",
         pattern: Optional[str] = None,
         max_items: int = 500,
-        max_bytes: int = 2 * 1024 * 1024,
+        max_bytes: int = 2 * 1024,
     ) -> Dict[str, Any]:
         encoding: str = "utf-8"
         try:
