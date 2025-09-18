@@ -27,9 +27,16 @@ def _fs_query(
         - max_items: 最大返回项数（默认 500，list/search 使用）
         - max_bytes: 最大读取字节数（默认 2MB，read 使用）
 
+    glob模式语法说明，理解用户的要求，合理使用：
+    - `*`：匹配任意数量字符（不含路径分隔符）
+    - `?`：匹配单个字符
+    - `[seq]`：匹配序列中的任一字符（如 [abc] 匹配 a/b/c）
+    - `**`：递归匹配子目录（用于跨目录搜索）
+    - 示例：`*.txt`（当前目录 .txt 文件）、`**/*.txt`（所有子目录 .txt 文件）、`**/*.{txt,md,py}`（多种扩展名）、`src/**/*.py`（src 下所有 .py 文件）
+
     模式：
     - list: 列出 path 目录下的文件或文件夹信息（非递归），可配 pattern 过滤
-    - search: 在 path 下，递归搜索匹配的文件/目录，需提供 pattern
+    - search: 在 path 下，搜索匹配的文件/目录，需提供 pattern，递归搜索需要在 pattern 里用 `**` 表示
     - read: 读取 path 指定的文本内容（按 UTF-8 尝试解码；超限截断）
     - stat: 查看 path 指定的文件/目录属性（大小、类型、mtime 等）
 
@@ -39,6 +46,7 @@ def _fs_query(
     - 读文件：{ op:"read", items:[{path:"docs/readme.md", max_bytes:1000}, {path:"docs/another.md", max_bytes:1000}, {...}] }
     - 查文件：{ op:"search", items:[{path:".", pattern:"*.py", max_items:100}] }
     - 看属性：{ op:"stat", items:[{path:"src"}, {path:"data/input.csv"}, {...}] }
+    - 递归搜索：{ op:"search", items:[{path:"文档", pattern:"**/*.txt", max_items:200}] }
     """
     DEFAULT_PATH = "."
     DEFAULT_MAX_ITEMS = 500
