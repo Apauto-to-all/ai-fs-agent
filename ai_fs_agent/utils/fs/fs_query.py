@@ -83,7 +83,11 @@ class FsQueryOperator:
                     "data": {
                         "path": rel_to_workspace(base),
                         "size": size,
-                        "truncated": size > len(data),
+                        "truncated": (
+                            f"内容被截断，取前{len(data)}字节，如果用户要求读取更多，请调整 max_bytes"
+                            if size > len(data)
+                            else "内容完整，未被截断"
+                        ),
                         "content": text,
                     },
                 }
