@@ -14,8 +14,8 @@ prod_format = "%(asctime)s %(levelname)s %(message)s"
 def setup_logging() -> None:
     # 日志记录器初始化
     logging.basicConfig(
-        # level=logging.DEBUG if is_dev else logging.INFO,
-        level=logging.INFO,
+        level=logging.DEBUG if is_dev else logging.INFO,
+        # level=logging.INFO,
         format=dev_format if is_dev else prod_format,
         datefmt="%Y-%m-%d %H:%M:%S",
         handlers=[
