@@ -6,6 +6,7 @@ import tomllib  # Python 3.11+
 from pydantic import BaseModel, Field
 
 from langchain_openai import ChatOpenAI  # 使用 OpenAI 兼容协议的客户端
+from langchain_openai import OpenAIEmbeddings  # 使用 OpenAI 兼容协议的嵌入模型
 from langchain_core.rate_limiters import InMemoryRateLimiter
 from ai_fs_agent.config import LLM_CONFIG_PATH, ENV_PATH
 
@@ -25,6 +26,7 @@ class RoutingConfig(BaseModel):
     fast: Optional[str] = None  # 快速响应模型 ID
     reason: Optional[str] = None  # 复杂推理模型 ID
     vision: Optional[str] = None  # 图像理解模型 ID
+    embedding: Optional[str] = None  # Embedding 模型 ID
 
 
 class AppConfig(BaseModel):
@@ -53,6 +55,9 @@ def _load_toml_config(path: Path) -> AppConfig:
         refs.append(routing.reason)
     if routing.vision:
         refs.append(routing.vision)
+    # 添加 embedding 引用检查
+    if routing.embedding:
+        refs.append(routing.embedding)
     missing = [r for r in refs if r not in models]
     if missing:
         raise ValueError(f"路由引用了不存在的模型: {missing}")
@@ -69,27 +74,44 @@ class LLMManager:
         return list(self.config.models.keys())
 
     def get_by_role(
-        self, role: Literal["default", "fast", "reason", "vision"] = "default"
+        self,
+        role: Literal["default", "fast", "reason", "vision", "embedding"] = "default",
     ):
-        if role == "fast":
-            return self._get_model(self.config.routing.fast)
-        if role == "reason":
-            return self._get_model(self.config.routing.reason)
-        if role == "vision":
-            return self._get_model(self.config.routing.vision)
-        return self._get_model(self.config.routing.default)
+        if role == "embedding":
+            getter = self._get_embedding
+        else:
+            getter = self._get_model
 
+        routing_value = getattr(self.config.routing, role)
+        if not routing_value:
+            raise ValueError(f"未配置默认的 {role} 模型")
+
+        return getter(routing_value)
+
+    # 获取指定 ID 的模型实例
     def _get_model(self, model_id: str):
         if model_id in self._cache:
             return self._cache[model_id]
         spec = self.config.models.get(model_id)
         if not spec:
             raise KeyError(f"未知的模型 ID：{model_id}")
-        llm = self._build_openai_compatible(spec)
+        llm = self._build_llm(spec)
         self._cache[model_id] = llm
         return llm
 
-    def _build_openai_compatible(self, spec: LlmModelSpec):
+    # 获取指定 ID 的 Embedding 实例
+    def _get_embedding(self, model_id: str):
+        if model_id in self._cache:
+            return self._cache[model_id]
+        spec = self.config.models.get(model_id)
+        if not spec:
+            raise KeyError(f"未知的模型 ID：{model_id}")
+        embedding_model = self._build_embedding(spec)
+        self._cache[model_id] = embedding_model
+        return embedding_model
+
+    # 构造普通 LLM 模型
+    def _build_llm(self, spec: LlmModelSpec):
         # 强制要求 base_url 与 api_key_env
         if not spec.base_url:
             raise ValueError(f"模型 '{spec.id}' 需要 base_url（OpenAI 兼容）")
@@ -118,3 +140,25 @@ class LLMManager:
             return ChatOpenAI(**params, rate_limiter=rate_limiter)
 
         return ChatOpenAI(**params)
+
+    def _build_embedding(self, spec: LlmModelSpec):
+        if not spec.base_url:
+            raise ValueError(f"Embedding 模型 '{spec.id}' 需要 base_url（OpenAI 兼容）")
+        if not spec.api_key_env or not os.environ.get(spec.api_key_env):
+            raise ValueError(
+                f"Embedding 模型 '{spec.id}' 需要环境变量 '{spec.api_key_env}' 来获取 API 密钥，请在 {ENV_PATH} 中设置"
+            )
+
+        params: Dict[str, Any] = {
+            "model": spec.model,
+            "base_url": spec.base_url,
+            "api_key": os.environ[spec.api_key_env],
+        }
+        # 透传可选参数（如 dimensions/timeout 等）
+        if spec.extra:
+            extra = dict(spec.extra)
+            for k in ("model", "base_url", "api_key"):
+                extra.pop(k, None)
+            params.update(extra)
+
+        return OpenAIEmbeddings(**params)
