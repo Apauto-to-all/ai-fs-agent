@@ -1,4 +1,5 @@
 import re
+from typing import List
 from langchain_text_splitters import (
     RecursiveCharacterTextSplitter,
     CharacterTextSplitter,
@@ -69,10 +70,8 @@ class TextProcessor:
         """
         # 先 normalize 文本（压缩空白、去除首尾空白）
         normalized_text = self.normalize(text, squeeze_ws=True, strip=True)
-
         # 设置最大字符数
         max_total_chars = 1500
-
         # 短文本：直接三等分
         if len(normalized_text) <= max_total_chars:
             third = len(normalized_text) // 3
@@ -80,7 +79,6 @@ class TextProcessor:
             middle = normalized_text[third : 2 * third]
             back = normalized_text[2 * third :]
             return ThreePartSections(front=front, middle=middle, back=back)
-
         # 使用 CharacterTextSplitter 按固定长度分割
         chunk_size = max_total_chars // 3
         splitter = CharacterTextSplitter(
@@ -88,14 +86,11 @@ class TextProcessor:
             chunk_overlap=0,  # 无重叠，快速
         )
         chunks = splitter.split_text(normalized_text)
-
-        if not chunks:
-            return ThreePartSections()
-
         # 获取前、中、后块
-        front = chunks[0] if len(chunks) > 0 else ""
-        middle = chunks[len(chunks) // 2] if len(chunks) > 1 else ""
-        back = chunks[-1] if len(chunks) > 0 else ""
+        total = len(chunks)
+        front = chunks[0] if total > 0 else ""
+        middle = chunks[total // 2] if total > 1 else ""
+        back = chunks[-1] if total >= 1 else ""
 
         return ThreePartSections(front=front, middle=middle, back=back)
 
@@ -111,7 +106,6 @@ class TextProcessor:
         """
         # 先 normalize 文本（压缩空白、去除首尾空白）
         normalized_text = self.normalize(text, squeeze_ws=True, strip=True)
-
         # 短文本：直接三等分，确保总字符数 = 实际长度
         if len(normalized_text) < max_total_chars:
             third = len(normalized_text) // 3
@@ -119,11 +113,38 @@ class TextProcessor:
             middle = normalized_text[third : 2 * third]
             back = normalized_text[2 * third :]
             return ThreePartSections(front=front, middle=middle, back=back)
-
         # 动态 计算 chunk_size，确保前中后总字符数约为 max_total_chars
         dynamic_chunk_size = max_total_chars // 3
+        chunks = self.split_into_chunks(
+            text, chunk_size=dynamic_chunk_size, chunk_overlap=50
+        )
+        # 获取前、中、后块
+        total = len(chunks)
+        front = chunks[0] if total > 0 else ""
+        middle = chunks[total // 2] if total > 1 else ""
+        back = chunks[-1] if total >= 1 else ""
 
-        # 优化分隔符：支持中英文混合，优先段落，再句子，再词/字符
+        return ThreePartSections(front=front, middle=middle, back=back)
+
+    def split_into_chunks(
+        self,
+        text: str,
+        chunk_size: int = 1000,
+        chunk_overlap: int = 50,
+    ) -> List[str]:
+        """
+        使用 RecursiveCharacterTextSplitter 切割文本，返回所有切割片段列表。
+        支持中英文混合文本，按段落、句子、词、字符递归分割。
+        :param text: 原始文本
+        :param chunk_size: 每个片段的最大字符数
+        :param chunk_overlap: 片段间重叠字符数
+        :return: 切割后的文本片段列表
+        """
+        if not isinstance(text, str) or not text.strip():
+            return []
+        # 先归一化文本（压缩空白、去除首尾空白）
+        normalized_text = self.normalize(text, squeeze_ws=True, strip=True)
+        # 创建 RecursiveCharacterTextSplitter
         splitter = RecursiveCharacterTextSplitter(
             separators=[
                 "\n\n",  # 段落（双换行）
@@ -139,29 +160,9 @@ class TextProcessor:
                 " ",  # 空格（词分隔）
                 "",  # 字符级（兜底）
             ],
-            chunk_size=dynamic_chunk_size,
-            chunk_overlap=50,  # 增加重叠，保持上下文
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
         )
+        # 切割文本并返回片段列表
         chunks = splitter.split_text(normalized_text)
-
-        if not chunks:
-            return ThreePartSections()  # 使用默认值
-
-        # 获取前1个（字符串）
-        front = chunks[0] if len(chunks) > 0 else ""
-
-        # 获取中间1个（字符串）
-        total = len(chunks)
-        if total >= 3:
-            middle = chunks[total // 2]
-        else:
-            middle = ""  # 如果块数少，中间为空
-
-        # 获取后1个（字符串）
-        back = chunks[-1] if total >= 1 else ""
-
-        return ThreePartSections(
-            front=front,
-            middle=middle,
-            back=back,
-        )
+        return chunks

@@ -1,6 +1,8 @@
 import logging
 from pathlib import Path
 from ai_fs_agent.utils.path_safety import ensure_in_workspace, is_path_excluded
+from langchain_community.document_loaders import TextLoader
+from langchain_core.documents.base import Document
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +29,7 @@ class FileLoader:
     }
     OFFICE_EXTS = {".docx", ".xlsx", ".pptx"}
 
-    def load_text(self, path: str) -> str:
+    def load_text(self, path: str) -> list[Document]:
         """
         根据扩展名自动选择解析器，返回utf-8字符串（尽量保留原格式换行）。
         传入路径可为相对路径，会自动转换为工作区内的绝对路径。
@@ -47,19 +49,22 @@ class FileLoader:
 
     # ---------- 各类型具体读取 ----------
 
-    def _read_text_file(self, path: Path) -> str:
-        """读取纯文本文件，返回字符串"""
+    def _read_text_file(self, path: Path) -> list[Document]:
+        """读取纯文本文件，返回 Document 列表"""
         # 多编码回退策略，尽量读出文本
         try:
-            with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                return f.read()
+            loader = TextLoader(file_path=path, encoding="utf-8")
+            documents = loader.load()
+            return documents
         except Exception as e:
             raise Exception(f"读取文本文件失败: {path}: {e}")
 
-    def _read_office_file(self, path: Path) -> str:
-        """读取 Office 文档，返回 Markdown 格式内容"""
+    def _read_office_file(self, path: Path) -> list[Document]:
+        """读取 Office 文档，返回 Markdown 格式内容，封装为 Document 列表"""
         from markitdown import MarkItDown
 
         md = MarkItDown()
         result = md.convert(path)
-        return result.text_content
+        return [
+            Document(page_content=result.text_content, metadata={"source": str(path)})
+        ]
