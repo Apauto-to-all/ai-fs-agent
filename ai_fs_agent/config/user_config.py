@@ -18,6 +18,10 @@ class UserConfig(BaseModel):
         default=True,
         description="是否使用 Git 管理工作目录；若未安装 Git 或显式设为 False，则禁用 Git 功能",
     )
+    use_rag: bool = Field(
+        default=True,
+        description="是否使用 RAG（Retrieval-Augmented Generation）功能；用于文件搜索和问答",
+    )
 
     def _save_to_file(self):
         """保存设置到文件"""

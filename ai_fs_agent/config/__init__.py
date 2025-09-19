@@ -2,6 +2,7 @@ from ai_fs_agent.config.paths_config import (
     LLM_CONFIG_PATH,
     ENV_PATH,
     USER_CONFIG_PATH,
+    RAG_INDEX_DIR,
     bootstrap_paths,
 )
 from ai_fs_agent.config.logging_config import setup_logging
