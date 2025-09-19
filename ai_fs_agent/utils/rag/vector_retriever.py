@@ -5,7 +5,7 @@
 """
 
 from typing import List
-from langchain_chroma import Chroma  # 更新导入
+from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 from ai_fs_agent.llm import llm_manager
 from ai_fs_agent.config import RAG_INDEX_DIR
@@ -30,21 +30,18 @@ class VectorRetriever:
             persist_directory=self.index_dir, embedding_function=self.embeddings
         )
 
-    def search(self, query: str, k: int = 5) -> List[str]:
+    def search(self, query: str, k: int = 5, score_threshold: float = 1.5) -> List[str]:
         """
         :param query: 查询关键词/问题
         :param k: 返回结果数量
+        :param score_threshold: 相似度分数阈值，默认 1.5，score 越小越相似
         :return: 命中文档的原始文本内容列表（按相似度从高到低）
         """
-        retriever = self.vs.as_retriever(search_kwargs={"k": k})
-        # 更新为 invoke 方法
-        docs = retriever.invoke(query)
-        return [d.page_content for d in docs]
-
-    # 如果需要返回元组（文本, 分数）
-    def search_with_scores(self, query: str, k: int = 5) -> List[tuple[str, float]]:
-        """
-        :return: 列表，每个元素为 (文本内容, 相似度分数)
-        """
-        results_with_scores = self.vs.similarity_search_with_score(query, k=k)
-        return [(doc.page_content, score) for doc, score in results_with_scores]
+        retriever = self.vs.similarity_search_with_score(query=query, k=k)
+        # score 越小越相似，保留 score <= score_threshold
+        filtered = [
+            doc.page_content + f"(相似度: {score:.2f}，分数越低越相似)"
+            for doc, score in retriever
+            if score is not None and score <= score_threshold
+        ]
+        return filtered

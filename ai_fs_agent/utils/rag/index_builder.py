@@ -8,7 +8,7 @@
 import hashlib
 from typing import Iterable, List, Optional
 
-from langchain_chroma import Chroma  # 更新导入
+from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 
 from ai_fs_agent.llm import llm_manager
