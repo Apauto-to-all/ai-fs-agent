@@ -2,6 +2,7 @@ from datetime import datetime
 import logging
 import traceback
 from typing import Any, Dict, List
+import threading
 
 from langchain.tools import tool
 
@@ -54,8 +55,9 @@ def classify_get_tags() -> Dict[str, Any]:
                 "ok": True,
                 "message": "所有文件均已分类，无需处理（只会对工作目录下的文件进行分类处理，不包含子目录）",
             }
-    except Exception:
-        logger.error(traceback.format_exc())
+    except Exception as e:
+        logger.debug(traceback.format_exc())
+        logger.error(e)
         return {
             "ok": False,
             "error": "classify_get_labels 执行失败",
@@ -80,8 +82,9 @@ def classify_get_rules() -> Dict[str, Any]:
             "ok": True,
             "rules": content,
         }
-    except Exception:
-        logger.error(traceback.format_exc())
+    except Exception as e:
+        logger.debug(traceback.format_exc())
+        logger.error(e)
         return {
             "ok": False,
             "error": f"读取“分类规则”失败，提醒用户手动检查“分类规则”（{CLASSIFY_RULES_PATH}）文件",
@@ -103,8 +106,9 @@ def classify_update_rules(new_rules: str) -> Dict[str, Any]:
             "ok": True,
             "message": "分类规则已更新",
         }
-    except Exception:
-        logger.error(traceback.format_exc())
+    except Exception as e:
+        logger.debug(traceback.format_exc())
+        logger.error(e)
         return {
             "ok": False,
             "error": f"更新“分类规则”失败，请提醒用户手动检查“分类规则”（{CLASSIFY_RULES_PATH}）文件",
@@ -143,6 +147,7 @@ def classify_move_files(files_to_move: List[Dict[str, str]]) -> Dict[str, Any]:
 
         moved_files = []
         failed_files = []
+        rag_files = []
         for file_info in files_to_move:
             src = file_info.get("src")
             dst = file_info.get("dst")
@@ -155,6 +160,7 @@ def classify_move_files(files_to_move: List[Dict[str, str]]) -> Dict[str, Any]:
             )
             if move_result.get("ok"):
                 moved_files.append(f"{src} -> {dst}")
+                rag_files.append(dst)  # 记录移动后的文件路径，后续进行 RAG 索引
             else:
                 failed_files.append(
                     f"{src} -> {dst}: {move_result.get('error', '未知错误')}"
@@ -168,13 +174,38 @@ def classify_move_files(files_to_move: List[Dict[str, str]]) -> Dict[str, Any]:
         except Exception as e:
             pass  # 忽略提交失败
 
+        # 判断是否需要进行对文档RAG索引
+        try:
+            if user_config.use_rag and rag_files:
+                from ai_fs_agent.utils.rag.batch_index_builder import BatchIndexBuilder
+
+                def _run_rag_index(files: List[str]) -> None:
+                    try:
+                        logger.info(f"后台启动 RAG 索引构建，文件数: {len(files)}")
+                        b = BatchIndexBuilder()
+                        b.batch_build_index(files)
+                        logger.info("后台 RAG 索引构建完成")
+                    except Exception as e:
+                        logger.debug(traceback.format_exc())
+                        logger.error(e)
+                        logger.error("后台 RAG 索引构建失败")
+
+                # 启动守护线程在后台执行索引构建，不阻塞主线程
+                t = threading.Thread(
+                    target=_run_rag_index, args=(rag_files,), daemon=True
+                )
+                t.start()
+        except Exception:
+            pass  # 忽略 RAG 索引失败
+
         return {
             "ok": True,
             "message": f"批量移动完成: {moved_files}",
             "error": f"部分文件移动失败: {failed_files}" if failed_files else None,
         }
-    except Exception:
-        logger.error(traceback.format_exc())
+    except Exception as e:
+        logger.debug(traceback.format_exc())
+        logger.error(e)
         return {
             "ok": False,
             "error": "移动文件进行分类操作失败",
