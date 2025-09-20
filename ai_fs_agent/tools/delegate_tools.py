@@ -59,6 +59,3 @@ def delegate_to_agent(
         },
         ensure_ascii=False,
     )
-
-
-delete_agent_tools = [delegate_to_agent]
