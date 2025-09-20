@@ -167,6 +167,17 @@ def classify_move_files(files_to_move: List[Dict[str, str]]) -> Dict[str, Any]:
         # 判断是否需要进行对文档RAG索引
         try:
             if user_config.use_rag and rag_files:
+                # 检查embedding模型是否已配置
+                from ai_fs_agent.utils.rag.embedding_checker import (
+                    check_embedding_config,
+                )
+
+                if not check_embedding_config():
+                    user_config.use_rag = False
+                    raise Exception(
+                        "未配置embedding模型，无法使用RAG功能。请先配置有效的embedding模型。"
+                    )
+
                 from ai_fs_agent.utils.rag.huey_worker import (
                     start_huey_consumer_via_command,
                 )

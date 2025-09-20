@@ -14,6 +14,19 @@ def rag_query(query: str, top_k: int = 5) -> Dict[str, Any]:
     if not user_config.use_rag:
         return {"ok": False, "error": "RAG 功能已被配置为禁用"}
 
+    # 检查embedding模型是否已配置
+    try:
+        from ai_fs_agent.utils.rag.embedding_checker import check_embedding_config
+
+        if not check_embedding_config():
+            user_config.use_rag = False
+            return {
+                "ok": False,
+                "error": "未配置embedding模型，自动禁止 RAG 配置。请先配置有效的embedding模型后，再启用 RAG 配置",
+            }
+    except Exception:
+        return {"ok": False, "error": "检查embedding模型配置失败"}
+
     try:
         from ai_fs_agent.utils.rag.vector_retriever import VectorRetriever
 
