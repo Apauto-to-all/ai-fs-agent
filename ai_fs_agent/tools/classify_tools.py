@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 @tool("classify_get_tags")
 def classify_get_tags() -> Dict[str, Any]:
     """
-    获取未分类文件的标签
-    - 返回：{ ok, results?[], message?, error? }
+    获取未分类文件的标签 和 分类规则
+    - 返回：{ ok, results?[], classify_rules?, message?, error? }
     """
     try:
         # 读取工作目录下的文件
@@ -44,11 +44,28 @@ def classify_get_tags() -> Dict[str, Any]:
             tagger = BatchFileTagger(max_concurrency=5)
             results = tagger.batch_tag_files(unclassified_files)
 
+            # 分类规则读取
+            try:
+                classify_rules = (
+                    CLASSIFY_RULES_PATH.read_text(encoding="utf-8")
+                    if CLASSIFY_RULES_PATH.exists()
+                    else "“分类规则”不存在，请根据文件标签，自主调用 classify_update_rules 创建“分类规则”"
+                )
+            except Exception as e:
+                logger.debug(traceback.format_exc())
+                logger.error(e)
+                logger.error("读取“分类规则”失败")
+                return {
+                    "ok": False,
+                    "error": f"读取“分类规则”失败，提醒用户手动检查“分类规则”（{CLASSIFY_RULES_PATH}）文件",
+                }
+
             return {
                 "ok": True,
                 "results": [
                     {"file_path": res.file_path, "tags": res.tags} for res in results
                 ],
+                "classify_rules": classify_rules,
             }
         else:
             return {
@@ -61,33 +78,6 @@ def classify_get_tags() -> Dict[str, Any]:
         return {
             "ok": False,
             "error": "classify_get_labels 执行失败",
-        }
-
-
-@tool("classify_get_rules")
-def classify_get_rules() -> Dict[str, Any]:
-    """
-    获取分类规则，在进行文件分类前，先获取当前的分类规则
-    - 返回：{ ok, rules?, error? }
-    """
-    try:
-        if not CLASSIFY_RULES_PATH.exists():
-            return {
-                "ok": False,
-                "error": "“分类规则”文件不存在，需要进行自动生成",
-            }
-        # 使用 Path 读取，默认 UTF-8
-        content = CLASSIFY_RULES_PATH.read_text(encoding="utf-8")
-        return {
-            "ok": True,
-            "rules": content,
-        }
-    except Exception as e:
-        logger.debug(traceback.format_exc())
-        logger.error(e)
-        return {
-            "ok": False,
-            "error": f"读取“分类规则”失败，提醒用户手动检查“分类规则”（{CLASSIFY_RULES_PATH}）文件",
         }
 
 
@@ -208,7 +198,6 @@ def classify_move_files(files_to_move: List[Dict[str, str]]) -> Dict[str, Any]:
 
 classify_tools_list = [
     classify_get_tags,
-    classify_get_rules,
     classify_update_rules,
     classify_move_files,
 ]
