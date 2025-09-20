@@ -6,6 +6,32 @@ from ai_fs_agent.config import user_config  # 直接引用用户配置（自动�
 from ai_fs_agent.utils.workspace import check_workspace_dir
 
 
+def _get_user_confirmation(prompt: str, max_attempts: int = 5) -> Optional[str]:
+    """
+    通用的用户确认函数
+
+    Args:
+        prompt: 提示用户确认的信息
+        max_attempts: 最大尝试次数，默认为5次
+
+    Returns:
+        Optional[str]: 成功确认返回None，失败返回错误信息
+    """
+    for _ in range(max_attempts):
+        print(f"{prompt} (最多输入 {max_attempts} 次，如果都输入错误，将取消操作)")
+        confirm = input("请输入 (y/n)：").strip().lower()
+        if confirm == "y":
+            return None  # 确认成功，无错误信息
+        elif confirm == "n":
+            return "用户已取消操作"
+        else:
+            print("输入无效")
+
+    # 循环结束但未成功
+    error_msg = f"用户输错 {max_attempts} 次，已取消操作，提醒用户正常输入"
+    return error_msg
+
+
 @tool("check_workspace")
 def check_workspace() -> Dict[str, Any]:
     """检查当前设置的工作目录是否正常"""
@@ -67,8 +93,8 @@ def set_workspace_dir(path: str) -> Dict[str, Any]:
         return {"ok": False, "error": "工具报错，设置失败"}
 
 
-@tool("check_git_enabled")
-def check_git_enabled() -> Dict[str, Any]:
+@tool("check_git_config")
+def check_git_config() -> Dict[str, Any]:
     """检查是否启用了 Git 管理功能"""
     try:
         return {
@@ -90,30 +116,55 @@ def set_git_enabled(enable: bool) -> Dict[str, Any]:
         # 二次确认，避免误操作
         text = "开启" if enable else "关闭"
 
-        max_attempts = 5
-        for _ in range(max_attempts):
-            print(f"请确认是否{ text } Git 功能？(y/n)")
-            confirm = input("请输入 (y/n)：").strip().lower()
-            if confirm == "y":
-                pass
-            elif confirm == "n":
-                return {"ok": False, "message": "用户已取消操作"}
-            else:
-                print("输入无效")
+        error_msg = _get_user_confirmation(f"请确认是否{ text } Git 功能？(y/n)")
+        if error_msg:
+            return {"ok": False, "message": error_msg}
 
-            user_config.use_git = bool(enable)
-            extra = (
-                "已关闭 Git 功能，提醒用户手动清理，工作目录下的 Git 相关的文件和文件夹，比如 .git/"
-                if not enable
-                else "已开启 Git 功能。首次执行 Git 相关操作时，将在工作目录内自动初始化独立仓库。"
-            )
-            return {"ok": True, "message": extra}
+        user_config.use_git = bool(enable)
+        extra = (
+            "已关闭 Git 功能，提醒用户手动清理，工作目录下的 Git 相关的文件和文件夹，比如 .git/"
+            if not enable
+            else "已开启 Git 功能。首次执行 Git 相关操作时，将在工作目录内自动初始化独立仓库。"
+        )
+        return {"ok": True, "message": extra}
+    except Exception:
+        return {"ok": False, "error": "工具报错，设置失败"}
 
-        # 循环结束但未成功
+
+@tool("check_rag_config")
+def check_rag_config() -> Dict[str, Any]:
+    """检查是否启用了 RAG 功能"""
+    try:
         return {
-            "ok": False,
-            "error": f"用户输错 {max_attempts} 次，已取消操作，提醒用户正常输入",
+            "ok": True,
+            "message": "RAG 功能已启用" if user_config.use_rag else "RAG 功能已禁用",
         }
+    except Exception:
+        return {"ok": False, "error": "工具报错，检测失败"}
+
+
+@tool("set_rag_enabled")
+def set_rag_enabled(enable: bool) -> Dict[str, Any]:
+    """
+    开启或关闭 RAG 功能。
+    - 参数：
+      - enable: True 开启，False 关闭
+    """
+    try:
+        # 二次确认，避免误操作
+        text = "开启" if enable else "关闭"
+
+        error_msg = _get_user_confirmation(f"请确认是否{ text } RAG 功能？(y/n)")
+        if error_msg:
+            return {"ok": False, "message": error_msg}
+
+        user_config.use_rag = bool(enable)
+        extra = (
+            "已关闭 RAG 功能，将无法使用文件内容搜索和智能问答功能"
+            if not enable
+            else "已开启 RAG 功能。可以使用文件内容搜索和智能问答功能"
+        )
+        return {"ok": True, "message": extra}
     except Exception:
         return {"ok": False, "error": "工具报错，设置失败"}
 
@@ -122,6 +173,8 @@ def set_git_enabled(enable: bool) -> Dict[str, Any]:
 config_tools_list = [
     set_workspace_dir,
     check_workspace,
-    check_git_enabled,
+    check_git_config,
     set_git_enabled,
+    check_rag_config,
+    set_rag_enabled,
 ]
