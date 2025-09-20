@@ -1,8 +1,5 @@
 from datetime import datetime
-import logging
-import traceback
 from typing import Any, Dict, List
-import threading
 
 from langchain.tools import tool
 
@@ -12,6 +9,9 @@ from ai_fs_agent.config.paths_config import CLASSIFY_RULES_PATH
 from ai_fs_agent.utils.fs.fs_apply import _fs_apply_operator
 from ai_fs_agent.utils.fs.fs_query import _fs_query_operator
 from ai_fs_agent.utils.git.git_repo import _git_repo
+
+import logging
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -177,24 +177,18 @@ def classify_move_files(files_to_move: List[Dict[str, str]]) -> Dict[str, Any]:
         # 判断是否需要进行对文档RAG索引
         try:
             if user_config.use_rag and rag_files:
-                from ai_fs_agent.utils.rag.batch_index_builder import BatchIndexBuilder
-
-                def _run_rag_index(files: List[str]) -> None:
-                    try:
-                        logger.info(f"后台启动 RAG 索引构建，文件数: {len(files)}")
-                        b = BatchIndexBuilder()
-                        b.batch_build_index(files)
-                        logger.info("后台 RAG 索引构建完成")
-                    except Exception as e:
-                        logger.debug(traceback.format_exc())
-                        logger.error(e)
-                        logger.error("后台 RAG 索引构建失败")
-
-                # 启动守护线程在后台执行索引构建，不阻塞主线程
-                t = threading.Thread(
-                    target=_run_rag_index, args=(rag_files,), daemon=True
+                from ai_fs_agent.utils.rag.huey_worker import (
+                    start_huey_consumer_via_command,
                 )
-                t.start()
+
+                # 启动 Huey 消费者
+                start_huey_consumer_via_command()
+                # 导入 Huey 任务
+                from ai_fs_agent.utils.rag.rag_tasks import build_rag_index
+
+                # 异步调用任务（无需启动线程）
+                build_rag_index(rag_files)
+                logger.info(f"已将 {len(rag_files)} 个文件放入 RAG 索引队列")
         except Exception:
             pass  # 忽略 RAG 索引失败
 

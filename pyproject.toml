@@ -6,6 +6,7 @@ authors = [{ name = "Apauto-to-all", email = "apautotoall@outlook.com" }]
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "huey>=2.5.3",
     "langchain>=1.0.0a5",
     "langchain-chroma>=0.2.6",
     "langchain-community>=0.3.29",
