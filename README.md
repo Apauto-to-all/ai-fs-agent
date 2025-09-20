@@ -24,9 +24,12 @@ cd ai-fs-agent
 - 安装依赖
 
 ```bash
-pip install -U langchain langchain-openai langgraph pydantic python-dotenv send2trash
-# 可选：使用uv
+# 推荐方式：使用uv
 uv sync
+
+# 方式2：使用pip安装所有依赖
+pip install -U langchain langchain-openai langgraph pydantic python-dotenv send2trash
+pip install -U langchain-chroma langchain-community huey markitdown[docx,pptx,xlsx] simhash structured-output-prompt
 ```
 
 ### 3、首次初始化 ⚙️
@@ -116,6 +119,7 @@ python main_streaming.py
 - “设置工作目录为 D:\\my_workspace”（代理会进行路径校验与二次确认）
 - “查看当前是否启用 Git 管理”
 - “关闭 Git 管理功能”
+- “开启 RAG 功能”
 
 ### 版本管理（Git） 🧾
 
