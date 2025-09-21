@@ -35,14 +35,28 @@ class BatchFileTagger:
         """对一批文件进行主题标签抽取"""
         samples = self._load_and_prepare_samples(file_paths)
         uncached = [s for s in samples if not s.cache_record.tags]
+
         if uncached:
-            # 先处理图像文件，发送给图像模型，用于生成内容
+            # 分离图像文件并处理描述
             image_samples = [
                 s for s in uncached if s.file_content_model.file_type == "image"
             ]
-            # 处理图像文件，生成图像描述
-            self._process_images_batch(image_samples)
-            # 批量给文件打标签
+            image_samples_no_desc = []
+            for s in image_samples:
+                if s.cache_record.file_description:
+                    # 有缓存描述，使用缓存描述
+                    s.file_content_model.content = s.cache_record.file_description
+                    # 缓存描述也作为归一化文本用于标签提取
+                    s.file_content_model.normalized_text_for_tagging = (
+                        s.cache_record.file_description
+                    )
+                else:
+                    # 无缓存描述，添加到待处理列表
+                    image_samples_no_desc.append(s)
+            # 处理无描述的图像文件
+            if image_samples_no_desc:
+                self._process_images_batch(image_samples_no_desc)
+            # 批量给所有文件打标签
             self._process_tags_batch(uncached)
 
         return self._assemble_results(samples)
@@ -97,11 +111,18 @@ class BatchFileTagger:
             config={"max_concurrency": self.max_concurrency},
         )
         # 更新图像FileContentModel的content字段
+        # 将图像描述写入cache_record.file_description
+        updated = 0
         for s, resp in zip(image_samples, image_responses):
             if not resp:
                 continue
             s.file_content_model.content = resp.content
             s.file_content_model.normalized_text_for_tagging = resp.content
+            s.cache_record.file_description = resp.content
+            self.cache.update_file_description(s.cache_record, resp.content)
+            updated += 1
+        if updated:
+            self.cache.flush()
 
     def _process_tags_batch(self, uncached_samples: List[PreparedFileSample]):
         """

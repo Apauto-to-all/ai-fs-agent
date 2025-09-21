@@ -5,7 +5,6 @@ from typing import Dict, Optional, List
 from pydantic import BaseModel, Field
 from simhash import Simhash
 from ai_fs_agent.config.paths_config import TAGS_CACHE_PATH
-from ai_fs_agent.utils.ingest.text_processor import TextProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -14,9 +13,18 @@ class TagRecord(BaseModel):
     """文本内容对应的标签缓存记录"""
 
     content_id: str = Field(..., description="内容哈希ID（基于文本内容）")
+    """内容哈希ID，用于唯一标识文本内容"""
     simhash64: Optional[int] = Field(default=None, description="SimHash 64位指纹")
-    tags: List[str] = Field(default_factory=list, description="标签（首位为主标签）")
+    """SimHash 64位指纹，用于快速比较文本内容的相似度"""
+    tags: List[str] = Field(default_factory=list, description="标签列表")
+    """标签列表"""
+    file_description: Optional[str] = Field(
+        default=None,
+        description="文件内容描述（适用于图像、视频、可执行文件等非文本文件）",
+    )
+    """文件内容描述，适用于图像、视频、可执行文件等非文本文件"""
     ts: datetime = Field(default_factory=datetime.now, description="入库时间")
+    """标签缓存记录的创建时间"""
 
 
 class TagCacheModel(BaseModel):
@@ -51,18 +59,10 @@ class TagCacheService:
             self.cache_model = TagCacheModel()
             self.cache_model.save()
         self._simhash_hamming_threshold = simhash_hamming_threshold
-        self.processor = TextProcessor()
 
     # -------- 公共接口 --------
-    def get_or_create_empty(self, text: str) -> TagRecord:
+    def get_or_create_empty(self, normalized: str) -> TagRecord:
         """根据文本内容获取或创建空标签记录（不含标签）"""
-        # 切割文本，避免过长影响哈希和SimHash
-        sections = self.processor.split_for_tag_cache(text)
-        normalized = (
-            f"【开头内容】{sections.front}"
-            f"【中间内容】{sections.middle}"
-            f"【结尾内容】{sections.back}"
-        )
         cid = self._text_hash(normalized)
         hit = self.get_by_id(cid)
         if hit:
@@ -71,9 +71,19 @@ class TagCacheService:
         approx = self._find_by_simhash(sh, self._simhash_hamming_threshold)
         if approx:
             # 近似复用
-            record = TagRecord(content_id=cid, simhash64=sh, tags=approx.tags)
+            record = TagRecord(
+                content_id=cid,
+                simhash64=sh,
+                tags=approx.tags,
+                file_description=approx.file_description,
+            )
         else:
-            record = TagRecord(content_id=cid, simhash64=sh, tags=[])
+            record = TagRecord(
+                content_id=cid,
+                simhash64=sh,
+                tags=[],
+                file_description=None,
+            )
         self.cache_model.cache[cid] = record
         return record
 
@@ -87,6 +97,12 @@ class TagCacheService:
     def update_tags(self, record: TagRecord, tags: List[str]):
         """更新标签记录的标签列表，并写回缓存"""
         record.tags = tags
+        record.ts = datetime.now()
+        self.cache_model.cache[record.content_id] = record
+
+    def update_file_description(self, record: TagRecord, file_description: str):
+        """更新标签记录的文件描述（适用于图像、视频、可执行文件等非文本文件），并写回缓存"""
+        record.file_description = file_description
         record.ts = datetime.now()
         self.cache_model.cache[record.content_id] = record
 

@@ -14,6 +14,6 @@ batch_index_builder = BatchIndexBuilder()
 
 
 @huey.task()
-def build_rag_index(files: List[str]):
+def build_rag_index(file_paths: List[str]):
     """异步任务：构建 RAG 索引"""
-    batch_index_builder.batch_build_index(files)
+    batch_index_builder.batch_build_index(file_paths)
