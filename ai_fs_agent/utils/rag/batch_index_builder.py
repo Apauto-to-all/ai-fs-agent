@@ -41,23 +41,31 @@ class BatchIndexBuilder:
     def _load_and_split_texts(self, file_paths: Iterable[str]) -> List[str]:
         """加载文件，切割文本，返回文本片段列表（每段首行加路径）"""
         texts: List[str] = []
+
         for path in file_paths:
             try:
-                raw_text = self.loader.load_file(path).content
+                file_content = self.loader.load_file(path)
+                if file_content.file_type != "text":
+                    # TODO：对于非文本文件，加载tags_cache的file_description
+                    continue
+
             except ValueError as e:
                 print(f"⚠️ 加载文件失败: {path}，跳过。错误: {e}")
                 continue
-            if not raw_text.strip():
+
+            if not file_content.content.strip():
                 continue
+
             # 使用 split_into_chunks 切割文本
             chunks = self.processor.split_into_chunks(
-                raw_text,
+                file_content.content,
                 chunk_size=self.chunk_size,
                 chunk_overlap=self.chunk_overlap,
             )
-            for chunk in chunks:
-                # 每段首行加文件路径，便于检索
-                text = f"文件路径【{path}】\n{chunk}"
-                texts.append(text)
+
+            # 使用列表推导式替代嵌套循环
+            texts.extend(
+                f"文件路径【{file_content.file_path}】\n{chunk}" for chunk in chunks
+            )
 
         return texts
