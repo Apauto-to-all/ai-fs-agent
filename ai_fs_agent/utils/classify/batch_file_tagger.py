@@ -1,20 +1,16 @@
-import logging
-
-logger = logging.getLogger(__name__)
-
-from typing import List, Iterable, Tuple
+from typing import List, Iterable
 from langchain_core.messages import SystemMessage, HumanMessage
 from pydantic import BaseModel, Field
 
+from ai_fs_agent.utils.ingest.file_content_model import FileContentModel
 from ai_fs_agent.utils.ingest.file_loader import FileLoader
-from ai_fs_agent.utils.ingest.text_processor import TextProcessor
 from ai_fs_agent.utils.classify.tagging_llm import TaggingLLM, TagListModel
+from ai_fs_agent.utils.classify.image_llm import ImageLLM
 from ai_fs_agent.utils.classify.tag_service import TagCacheService, TagRecord
 
 
 class PreparedFileSample(BaseModel):
-    file_path: str = Field(..., description="原始文件路径")
-    normalized_text: str = Field(..., description="归一化文本")
+    file_content_model: FileContentModel
     cache_record: TagRecord  # 初始可能为空 tags=[]
 
 
@@ -24,125 +20,135 @@ class FileTaggingResult(BaseModel):
 
 
 class BatchFileTagger:
-    """
-    文件批量打标签编排：
-    1) 读取与裁剪
-    2) 归一化组装文本
-    3) 查询缓存 / 近似复用
-    4) 收集未命中样本 -> LLM 批量
-    5) 写回缓存
-    6) 汇总输出
-    """
+    """文件批量打标签，传入文件路径列表，自动对图像（调用图像理解模型进行描述）和文本文件进行打标签"""
 
     def __init__(self, max_concurrency: int = 5):
         """max_concurrency: LLM 并发数限制，防止过载"""
         self.loader = FileLoader()
-        self.processor = TextProcessor()
-        self.tagging_llm = TaggingLLM()
+        self.tagging_llm: TaggingLLM = None
+        self.image_llm: ImageLLM = None
         self.cache = TagCacheService()
         self.max_concurrency = max_concurrency
 
     # -------- 外部主入口 --------
-    def batch_tag_files(
-        self, file_paths: List[str], max_total_chars: int = 1500
-    ) -> List[FileTaggingResult]:
+    def batch_tag_files(self, file_paths: List[str]) -> List[FileTaggingResult]:
         """对一批文件进行主题标签抽取"""
-        samples = self._load_and_prepare_samples(file_paths, max_total_chars)
-        cached, uncached = self._split_cached_and_uncached(samples)
-
+        samples = self._load_and_prepare_samples(file_paths)
+        uncached = [s for s in samples if not s.cache_record.tags]
         if uncached:
-            requests = self._build_llm_requests(uncached)
-            responses = self._run_llm_batch(requests)
-            self._persist_new_tags(uncached, responses)
+            # 先处理图像文件，发送给图像模型，用于生成内容
+            image_samples = [
+                s for s in uncached if s.file_content_model.file_type == "image"
+            ]
+            # 处理图像文件，生成图像描述
+            self._process_images_batch(image_samples)
+            # 批量给文件打标签
+            self._process_tags_batch(uncached)
 
         return self._assemble_results(samples)
 
     # -------- 步骤函数 --------
     def _load_and_prepare_samples(
-        self, file_paths: Iterable[str], max_total_chars: int
+        self, file_paths: Iterable[str]
     ) -> List[PreparedFileSample]:
-        """读取文件，裁剪归一化，查询缓存"""
+        """读取文件，查询缓存"""
         result: List[PreparedFileSample] = []
         for path in file_paths:
-            try:
-                raw = self.loader.load_file(path).content
-            except Exception as e:
-                logger.error(f"读取文件失败 {path}: {e}")
-                continue
-            sections = self.processor.split_for_labeling(raw, max_total_chars)
-            normalized = (
-                f"【开头内容】{sections.front}\n"
-                f"【中间内容】{sections.middle}\n"
-                f"【结尾内容】{sections.back}\n"
+            file_content_model = self.loader.load_file(path)
+            # 查询缓存
+            cache_record = self.cache.get_or_create_empty(
+                file_content_model.normalized_text
             )
-            cache_record = self.cache.get_or_create_empty(raw)
             result.append(
                 PreparedFileSample(
-                    file_path=path,
-                    normalized_text=normalized,
+                    file_content_model=file_content_model,
                     cache_record=cache_record,
                 )
             )
         return result
 
-    def _split_cached_and_uncached(
-        self, samples: List[PreparedFileSample]
-    ) -> Tuple[List[PreparedFileSample], List[PreparedFileSample]]:
-        """根据缓存记录是否已有标签，拆分为已命中与未命中两组"""
-        cached = [s for s in samples if s.cache_record.tags]
-        uncached = [s for s in samples if not s.cache_record.tags]
-        return cached, uncached
+    def _process_images_batch(self, image_samples: List[PreparedFileSample]):
+        """
+        批量处理图像文件，生成图像描述或内容
+        :param image_samples: 图像文件样本列表
+        """
+        if not image_samples:
+            return
+        # 构建请求
+        if self.image_llm is None:
+            self.image_llm = ImageLLM()
+        messages_batch = []
+        sys_msg = SystemMessage(content=self.image_llm.system_prompt)
+        for s in image_samples:
+            human_msg = HumanMessage(
+                content=[
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": s.file_content_model.image_base64},
+                    },
+                ]
+            )
+            messages_batch.append([sys_msg, human_msg])
+        # 批量调用图像模型
+        model = self.image_llm.llm
+        # 批量生成文本描述，更新FileContentModel的content和normalized_text_for_tagging字段
+        image_responses = model.batch(
+            messages_batch,
+            config={"max_concurrency": self.max_concurrency},
+        )
+        # 更新图像FileContentModel的content字段
+        for s, resp in zip(image_samples, image_responses):
+            if not resp:
+                continue
+            s.file_content_model.content = resp.content
+            s.file_content_model.normalized_text_for_tagging = resp.content
 
-    def _build_llm_requests(self, samples: List[PreparedFileSample]):
-        """构建 LLM 批量请求"""
+    def _process_tags_batch(self, uncached_samples: List[PreparedFileSample]):
+        """
+        批量处理未命中缓存的文件
+        :param uncached_samples: 未命中缓存的文件样本列表
+        """
+        if not uncached_samples:
+            return
+        # 初始化 LLM
+        if self.tagging_llm is None:
+            self.tagging_llm = TaggingLLM()
         sys_msg = SystemMessage(content=self.tagging_llm.system_prompt)
-        reqs = []
-        for s in samples:
+        messages_batch = []
+        for s in uncached_samples:
             human_msg = HumanMessage(
                 content=(
-                    f"【文件名】{s.file_path}\n"
-                    f"{s.normalized_text}\n"
+                    f"【文件名】{s.file_content_model.file_path}\n"
+                    f"{s.file_content_model.normalized_text_for_tagging}\n"
                     f"{self.tagging_llm.structured_output_prompt}"
                 )
             )
-            reqs.append([sys_msg, human_msg])
-        return reqs
+            messages_batch.append([sys_msg, human_msg])
 
-    def _run_llm_batch(self, requests) -> List[TagListModel | None]:
-        """调用 LLM 批量处理"""
         model = self.tagging_llm.model_with_structure
-        try:
-            responses = model.batch(
-                requests,
-                config={"max_concurrency": self.max_concurrency},
-            )
-            return responses
-        except Exception as e:
-            logger.error(f"LLM 批处理失败: {e}")
-            return [None] * len(requests)
+        tag_responses: List[TagListModel] = model.batch(
+            messages_batch,
+            config={"max_concurrency": self.max_concurrency},
+        )
 
-    def _persist_new_tags(
-        self,
-        uncached_samples: List[PreparedFileSample],
-        responses: List[TagListModel | None],
-    ):
-        """将新标签写入缓存"""
+        # 将新标签写入缓存
         updated = 0
-        for sample, resp in zip(uncached_samples, responses):
+        for sample, resp in zip(uncached_samples, tag_responses):
             if not resp:
                 continue
-            tags = resp.tags
-            self.cache.update_tags(sample.cache_record, tags)
+            sample.cache_record.tags = resp.tags
+            self.cache.update_tags(sample.cache_record, resp.tags)
             updated += 1
         if updated:
             self.cache.flush()
-            logger.info(f"新增标签写入缓存：{updated} 条")
 
     def _assemble_results(
         self, samples: List[PreparedFileSample]
     ) -> List[FileTaggingResult]:
         """汇总所有样本的最终标签结果"""
         return [
-            FileTaggingResult(file_path=s.file_path, tags=s.cache_record.tags)
+            FileTaggingResult(
+                file_path=s.file_content_model.file_path, tags=s.cache_record.tags
+            )
             for s in samples
         ]
