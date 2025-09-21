@@ -82,6 +82,7 @@ class TextProcessor:
         # 使用 CharacterTextSplitter 按固定长度分割
         chunk_size = max_total_chars // 3
         splitter = CharacterTextSplitter(
+            separator="",
             chunk_size=chunk_size,
             chunk_overlap=0,  # 无重叠，快速
         )
