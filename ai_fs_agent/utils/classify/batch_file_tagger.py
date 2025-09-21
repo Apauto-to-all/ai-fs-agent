@@ -65,7 +65,7 @@ class BatchFileTagger:
         result: List[PreparedFileSample] = []
         for path in file_paths:
             try:
-                raw = self.loader.load_text(path)[0].page_content
+                raw = self.loader.load_file(path).content
             except Exception as e:
                 logger.error(f"读取文件失败 {path}: {e}")
                 continue

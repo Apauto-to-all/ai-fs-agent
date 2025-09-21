@@ -43,7 +43,7 @@ class BatchIndexBuilder:
         texts: List[str] = []
         for path in file_paths:
             try:
-                raw_text = self.loader.load_text(path)[0].page_content
+                raw_text = self.loader.load_file(path).content
             except ValueError as e:
                 print(f"⚠️ 加载文件失败: {path}，跳过。错误: {e}")
                 continue
