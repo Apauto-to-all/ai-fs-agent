@@ -4,6 +4,11 @@
 - 使用 VectorIndexBuilder 进行向量化并构建索引。
 """
 
+import logging
+import traceback
+
+logger = logging.getLogger(__name__)
+
 from typing import List, Iterable
 
 from ai_fs_agent.utils.ingest.file_loader import FileLoader
@@ -54,14 +59,19 @@ class BatchIndexBuilder:
                     if self.tags_cache is None:
                         self.tags_cache = TagCacheService()
                     tags_record = self.tags_cache.get_or_init_record(
-                        file_content.normalized_text, use_approx=False
+                        file_content.normalized_text_for_id, use_approx=False
                     )
                     if tags_record.file_description:
                         file_content.content = tags_record.file_description
                     else:
                         continue
-            except ValueError as e:
-                print(f"⚠️ 加载文件失败: {path}，跳过。错误: {e}")
+            except ValueError as ve:
+                # 文件不支持
+                logger.warning(f"文件不支持：{path}，错误信息：{ve}")
+                continue
+            except Exception as e:
+                logger.debug(traceback.format_exc())
+                logger.error(f"加载文件失败：{path}，错误信息：{e}")
                 continue
 
             if not file_content.content.strip():

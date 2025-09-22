@@ -1,3 +1,8 @@
+import logging
+import traceback
+
+logger = logging.getLogger(__name__)
+
 from typing import List, Iterable
 from langchain_core.messages import SystemMessage, HumanMessage
 from pydantic import BaseModel, Field
@@ -41,6 +46,7 @@ class BatchFileTagger:
             image_samples = [
                 s for s in uncached if s.file_content_model.file_type == "image"
             ]
+            # 储存无缓存描述的图像文件
             image_samples_no_desc = []
             for s in image_samples:
                 if s.cache_record.file_description:
@@ -53,9 +59,11 @@ class BatchFileTagger:
                 else:
                     # 无缓存描述，添加到待处理列表
                     image_samples_no_desc.append(s)
+
             # 处理无描述的图像文件
             if image_samples_no_desc:
                 self._process_images_batch(image_samples_no_desc)
+
             # 批量给所有文件打标签
             self._process_tags_batch(uncached)
 
@@ -68,10 +76,20 @@ class BatchFileTagger:
         """读取文件，查询缓存"""
         result: List[PreparedFileSample] = []
         for path in file_paths:
-            file_content_model = self.loader.load_file(path)
+            # 对于不支持的文件类型进行跳过
+            try:
+                file_content_model = self.loader.load_file(path)
+            except ValueError as ve:
+                # 文件不支持
+                logger.warning(f"文件不支持：{path}，错误信息：{ve}")
+                continue
+            except Exception as e:
+                logger.debug(traceback.format_exc())
+                logger.error(f"加载文件失败：{path}，错误信息：{e}")
+                continue
             # 查询缓存
             cache_record = self.cache.get_or_init_record(
-                file_content_model.normalized_text
+                file_content_model.normalized_text_for_id
             )
             result.append(
                 PreparedFileSample(

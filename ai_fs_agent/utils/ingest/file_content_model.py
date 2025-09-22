@@ -23,7 +23,7 @@ class FileContentModel(BaseModel):
     )
     """图像base64编码（图像文件）"""
     # 用于标识化文本（创建content_id）
-    normalized_text: Optional[str] = Field(
+    normalized_text_for_id: Optional[str] = Field(
         default=None, description="归一化文本，用于标识化文本内容"
     )
     """归一化文本，用于标识化文本"""
@@ -41,8 +41,8 @@ class FileContentModel(BaseModel):
         if not isinstance(data, dict):
             data = data.dict()
 
-        # 如果 normalized_text 已经设置值，则不重新计算
-        if data.get("normalized_text") is None:
+        # 如果 normalized_text_for_id 已经设置值，则不重新计算
+        if data.get("normalized_text_for_id") is None:
             file_type = data.get("file_type", "text")
             content = data.get("content", "")
             image_base64 = data.get("image_base64")
@@ -60,7 +60,7 @@ class FileContentModel(BaseModel):
                 # 其他文件类型，为空
                 normalized = ""
 
-            data["normalized_text"] = normalized
+            data["normalized_text_for_id"] = normalized
 
         # 如果 normalized_text_for_tagging 已经设置值，则不重新计算
         if data.get("normalized_text_for_tagging") is None:

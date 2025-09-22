@@ -35,6 +35,8 @@ def classify_get_tags() -> Dict[str, Any]:
                 "ok": True,
                 "message": "所有文件均已分类，无需处理（只会对工作目录下的文件进行分类处理，不包含子目录）",
             }
+        # TODO：一次性分类文件进行上限设置，或者分批次处理，避免文件过多导致AI无法处理
+        # 只处理工作目录下的文件，不包含子目录
         unclassified_files: List[str] = [
             f.get("path")
             for f in list_file_dir.get("data", {})
