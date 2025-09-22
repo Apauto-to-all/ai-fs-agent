@@ -9,6 +9,7 @@ from typing import List, Iterable
 from ai_fs_agent.utils.ingest.file_loader import FileLoader
 from ai_fs_agent.utils.ingest.text_processor import TextProcessor
 from ai_fs_agent.utils.rag.index_builder import VectorIndexBuilder
+from ai_fs_agent.utils.classify.tag_service import TagCacheService
 
 
 class BatchIndexBuilder:
@@ -20,15 +21,19 @@ class BatchIndexBuilder:
     4) 调用 VectorIndexBuilder 构建索引
     """
 
-    def __init__(self, chunk_size: int = 500, chunk_overlap: int = 50):
+    def __init__(
+        self, chunk_size: int = 500, chunk_overlap: int = 50, batch_size: int = 10
+    ):
         """chunk_size: 文本切割块大小；chunk_overlap: 块重叠大小"""
         self.loader = FileLoader()
         self.processor = TextProcessor()
         self.index_builder = VectorIndexBuilder()
+        self.tags_cache = None  # 如果有需要再加载
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self.batch_size = batch_size  # 默认批大小 10，可调整
 
-    def batch_build_index(self, file_paths: List[str], batch_size: int = 10) -> None:
+    def batch_build_index(self, file_paths: List[str]) -> None:
         """
         对一批文件进行索引构建。
         :param file_paths: 文件路径列表
@@ -36,7 +41,7 @@ class BatchIndexBuilder:
         texts = self._load_and_split_texts(file_paths)
         if not texts:
             return
-        self.index_builder.build(texts, batch_size=batch_size)  # 默认批大小 10，可调整
+        self.index_builder.build(texts, batch_size=self.batch_size)
 
     def _load_and_split_texts(self, file_paths: Iterable[str]) -> List[str]:
         """加载文件，切割文本，返回文本片段列表（每段首行加路径）"""
@@ -46,9 +51,15 @@ class BatchIndexBuilder:
             try:
                 file_content = self.loader.load_file(path)
                 if file_content.file_type != "text":
-                    # TODO：对于非文本文件，加载tags_cache的file_description
-                    continue
-
+                    if self.tags_cache is None:
+                        self.tags_cache = TagCacheService()
+                    tags_record = self.tags_cache.get_or_init_record(
+                        file_content.normalized_text, use_approx=False
+                    )
+                    if tags_record.file_description:
+                        file_content.content = tags_record.file_description
+                    else:
+                        continue
             except ValueError as e:
                 print(f"⚠️ 加载文件失败: {path}，跳过。错误: {e}")
                 continue

@@ -61,29 +61,37 @@ class TagCacheService:
         self._simhash_hamming_threshold = simhash_hamming_threshold
 
     # -------- 公共接口 --------
-    def get_or_create_empty(self, normalized: str) -> TagRecord:
-        """根据文本内容获取或创建空标签记录（不含标签）"""
+    def get_or_init_record(self, normalized: str, use_approx: bool = True) -> TagRecord:
+        """根据文本内容获取或初始化标签记录（不含标签）
+        Args:
+            normalized: 归一化的文本内容，用于标识
+            use_approx: 是否启用近似复用，默认为True
+        """
         cid = self._text_hash(normalized)
         hit = self.get_by_id(cid)
         if hit:
             return hit
         sh = self._simhash64(normalized)
-        approx = self._find_by_simhash(sh, self._simhash_hamming_threshold)
-        if approx:
-            # 近似复用
-            record = TagRecord(
-                content_id=cid,
-                simhash64=sh,
-                tags=approx.tags,
-                file_description=approx.file_description,
-            )
-        else:
-            record = TagRecord(
-                content_id=cid,
-                simhash64=sh,
-                tags=[],
-                file_description=None,
-            )
+
+        # 根据参数决定是否进行近似复用
+        tags = []
+        file_description = None
+
+        if use_approx:
+            approx = self._find_by_simhash(sh, self._simhash_hamming_threshold)
+            if approx:
+                # 近似复用
+                tags = approx.tags
+                file_description = approx.file_description
+
+        # 创建记录
+        record = TagRecord(
+            content_id=cid,
+            simhash64=sh,
+            tags=tags,
+            file_description=file_description,
+        )
+
         self.cache_model.cache[cid] = record
         return record
 

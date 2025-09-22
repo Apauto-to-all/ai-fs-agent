@@ -57,8 +57,8 @@ class FileContentModel(BaseModel):
                 sections = processor.split_for_tag_cache(image_base64)
                 normalized = sections.front + sections.middle + sections.back
             else:
-                # 其他文件类型，抛出错误
-                raise ValueError(f"不支持的文件类型：{file_type}")
+                # 其他文件类型，为空
+                normalized = ""
 
             data["normalized_text"] = normalized
 
@@ -76,12 +76,9 @@ class FileContentModel(BaseModel):
                     f"【中间内容】{sections.middle}\n"
                     f"【结尾内容】{sections.back}\n"
                 )
-            elif file_type == "image":
-                # 对于图像文件，直接使用图像描述
-                normalized = content
             else:
-                # 其他文件类型，抛出错误
-                raise ValueError(f"不支持的文件类型：{file_type}")
+                # 其他文件类型，为空
+                normalized = ""
 
             data["normalized_text_for_tagging"] = normalized
 

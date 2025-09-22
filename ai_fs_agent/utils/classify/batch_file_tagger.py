@@ -70,7 +70,7 @@ class BatchFileTagger:
         for path in file_paths:
             file_content_model = self.loader.load_file(path)
             # 查询缓存
-            cache_record = self.cache.get_or_create_empty(
+            cache_record = self.cache.get_or_init_record(
                 file_content_model.normalized_text
             )
             result.append(
@@ -93,6 +93,7 @@ class BatchFileTagger:
             self.image_llm = ImageLLM()
         messages_batch = []
         sys_msg = SystemMessage(content=self.image_llm.system_prompt)
+        # TODO：对图像进行压缩处理，减少Token消耗
         for s in image_samples:
             human_msg = HumanMessage(
                 content=[
