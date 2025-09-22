@@ -71,15 +71,16 @@ def git_rollback(commit: str, clean_untracked: bool = False) -> Dict[str, Any]:
         for i in range(max_attempts):
             confirm = input("请输入 (y/n)：").strip()
             if confirm.lower() == "y":
-                pass
+                # 用户确认，执行回退操作
+                head = _git_repo.rollback_to(
+                    commit, clean_untracked=bool(clean_untracked)
+                )
+                return {"ok": True, "message": f"已回退，head：{head}"}
             elif confirm.lower() == "n":
                 return {"ok": False, "message": "用户已取消回退操作"}
             else:
                 print("输入无效，请输入 y 或 n。")
                 continue
-
-            head = _git_repo.rollback_to(commit, clean_untracked=bool(clean_untracked))
-            return {"ok": True, "message": f"已回退，head：{head}"}
 
         # 循环结束但未成功
         return {
