@@ -27,6 +27,10 @@ class FileTaggingResult(BaseModel):
 class BatchFileTagger:
     """文件批量打标签，传入文件路径列表，自动对图像（调用图像理解模型进行描述）和文本文件进行打标签"""
 
+    # TODO：优化文件分类功能，
+    # 1、自主可控性不强，不能手动给文件打标签
+    # 2、分类规则质量不稳定，分类规则让AI单独进行管理，并提供分类规则模版便于可控
+
     def __init__(self, max_concurrency: int = 5):
         """max_concurrency: LLM 并发数限制，防止过载"""
         self.loader = FileLoader()

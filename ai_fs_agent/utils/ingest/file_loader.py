@@ -26,7 +26,19 @@ class FileLoader:
     OFFICE_EXTS = {".docx", ".xlsx", ".pptx"}
     IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp", ".svg"}
     PDF_EXTS = {".pdf"}
-    # TODO：支持更多文件类型，比如exe、zip等
+    # TODO: 扩展文件类型支持和智能文件夹处理
+    # 1. 新增文件类型支持：
+    #    - 压缩文件：zip, rar, 7z（提取内容列表和元数据，或联网搜索）
+    #    - 可执行文件：exe, dll（读取版本信息和数字签名，或联网搜索）
+    #    - 安装包：msi, deb, rpm（解析包信息，或联网搜索）
+    # 2. 文件夹智能识别：
+    #    - 软件目录：含有exe和dll文件的程序文件夹（联网搜索获取软件描述）
+    #    - 项目目录：基于特征文件（package.json, requirements.txt等）识别项目类型
+    # TODO: 实现LLM联网搜索功能
+    # - 对于无法直接读取的文件类型（exe、dll、zip等），通过文件名和路径在线搜索获取描述信息
+    # - 对于文件夹，分析目录结构和关键文件特征，生成内容摘要
+    # - 提供用户手动输入描述的接口作为备选方案
+    # - 搜索结果需缓存避免重复请求，提升性能
 
     def load_file(self, path: str) -> FileContentModel:
         """

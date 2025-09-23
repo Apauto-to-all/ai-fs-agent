@@ -51,11 +51,8 @@ def delegate_to_agent(
     msgs: List[Any] = result.get("messages", [])
     final_text = _last_ai_text(msgs)
 
-    return json.dumps(
-        {
-            "status": "ok",
-            "agent": agent,
-            "final": final_text,
-        },
-        ensure_ascii=False,
-    )
+    return {
+        "status": "ok",
+        "agent": agent,
+        "final": final_text,
+    }

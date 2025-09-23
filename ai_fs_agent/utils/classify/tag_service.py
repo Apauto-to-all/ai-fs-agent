@@ -67,6 +67,7 @@ class TagCacheService:
             normalized: 归一化的文本内容，用于标识
             use_approx: 是否启用近似复用，默认为True
         """
+        # TODO：对缓存功能进行性能优化
         cid = self._text_hash(normalized)
         hit = self.get_by_id(cid)
         if hit:
