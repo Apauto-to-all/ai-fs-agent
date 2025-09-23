@@ -6,7 +6,6 @@ from ai_fs_agent.utils.path_safety import (
     is_path_excluded,
     rel_to_workspace,
 )
-from langchain_community.document_loaders import TextLoader
 from ai_fs_agent.utils.ingest.file_content_model import FileContentModel
 
 logger = logging.getLogger(__name__)
@@ -26,6 +25,8 @@ class FileLoader:
     TEXT_EXTS = {".txt", ".md", ".csv", ".tsv", ".json", ".yaml", ".yml", ".toml"}
     OFFICE_EXTS = {".docx", ".xlsx", ".pptx"}
     IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp", ".svg"}
+    PDF_EXTS = {".pdf"}
+    # TODO：支持更多文件类型，比如exe、zip等
 
     def load_file(self, path: str) -> FileContentModel:
         """
@@ -41,10 +42,13 @@ class FileLoader:
         ext = abs_p.suffix.lower()
         if ext in self.TEXT_EXTS:
             return self._read_text_file(abs_p)
-        if ext in self.OFFICE_EXTS:
+        elif ext in self.OFFICE_EXTS:
             return self._read_office_file(abs_p)
-        if ext in self.IMAGE_EXTS:
+        elif ext in self.IMAGE_EXTS:
             return self._read_image_file(abs_p)
+        elif ext in self.PDF_EXTS:
+            return self._read_pdf_file(abs_p)
+
         raise ValueError(f"暂不支持的文件类型: {ext} ({path})")
 
     # ---------- 各类型具体读取 ----------
@@ -52,14 +56,23 @@ class FileLoader:
     def _read_text_file(self, path: Path) -> FileContentModel:
         """读取纯文本文件，返回 FileContentModel 对象"""
         # 多编码回退策略，尽量读出文本
-        try:
-            documents = TextLoader(file_path=path, encoding="utf-8").load()
-            content = documents[0].page_content if documents else ""
-            return FileContentModel(
-                file_path=rel_to_workspace(path), file_type="text", content=content
-            )
-        except Exception as e:
-            raise Exception(f"读取文本文件失败: {path}: {e}")
+        encodings = ["utf-8", "gbk", "gb2312", "latin-1", "cp1252"]
+        content = ""
+
+        for encoding in encodings:
+            try:
+                with open(path, "r", encoding=encoding) as f:
+                    content = f.read()
+                break
+            except UnicodeDecodeError:
+                continue
+
+        if not content:
+            raise Exception(f"无法解码文本文件: {path}")
+
+        return FileContentModel(
+            file_path=rel_to_workspace(path), file_type="text", content=content
+        )
 
     def _read_office_file(self, path: Path) -> FileContentModel:
         """读取 Office 文档，返回 Markdown 格式内容，封装为 FileContentModel 对象"""
@@ -71,6 +84,21 @@ class FileLoader:
             file_path=rel_to_workspace(path),
             file_type="text",
             content=result.text_content,
+        )
+
+    def _read_pdf_file(self, path: Path) -> FileContentModel:
+        """读取PDF文件,提取文本内容,封装为 FileContentModel 对象"""
+        import pdfplumber
+
+        text = ""
+        with pdfplumber.open(path) as pdf:
+            for page in pdf.pages:
+                text += page.extract_text() + "\n"
+
+        return FileContentModel(
+            file_path=rel_to_workspace(path),
+            file_type="text",
+            content=text,
         )
 
     def _read_image_file(self, path: Path) -> FileContentModel:
