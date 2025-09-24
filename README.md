@@ -28,8 +28,8 @@ cd ai-fs-agent
 uv sync
 
 # 方式2：使用pip安装所有依赖
-pip install -U langchain langchain-openai langgraph pydantic python-dotenv send2trash
-pip install -U langchain-chroma langchain-community huey markitdown[docx,pptx,xlsx] simhash structured-output-prompt
+# requirements.txt 文件由 uv export -f ai_fs_agent > requirements.txt 导出
+pip install -r requirements.txt
 ```
 
 ### 3、首次初始化 ⚙️
