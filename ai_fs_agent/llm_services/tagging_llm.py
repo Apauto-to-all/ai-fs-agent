@@ -1,7 +1,9 @@
 from typing import List
 from pydantic import BaseModel, Field
+from langchain_core.messages import SystemMessage, HumanMessage
 from ai_fs_agent.llm import llm_manager
 from structured_output_prompt import generate_structured_prompt
+from ai_fs_agent.utils.ingest.file_content_model import FileContentModel
 
 
 class TagListModel(BaseModel):
@@ -60,3 +62,25 @@ class TaggingLLM:
 只输出标签数组（不要多余文字）
 """.strip()
         self.structured_output_prompt = generate_structured_prompt(TagListModel)
+
+    def process_tags_batch(
+        self, file_content_models: List[FileContentModel], max_concurrency: int = 5
+    ) -> List[TagListModel]:
+        sys_msg = SystemMessage(content=self.system_prompt)
+        messages_batch = []
+        for s in file_content_models:
+            human_msg = HumanMessage(
+                content=(
+                    f"【文件名】{s.file_path}\n"
+                    f"{s.normalized_text_for_tagging}\n"
+                    f"{self.structured_output_prompt}"
+                )
+            )
+            messages_batch.append([sys_msg, human_msg])
+
+        tag_responses: List[TagListModel] = self.model_with_structure.batch(
+            messages_batch,
+            config={"max_concurrency": max_concurrency},
+        )
+
+        return tag_responses

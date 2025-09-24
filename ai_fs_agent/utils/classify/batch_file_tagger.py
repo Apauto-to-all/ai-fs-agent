@@ -4,13 +4,11 @@ import traceback
 logger = logging.getLogger(__name__)
 
 from typing import List, Iterable
-from langchain_core.messages import SystemMessage, HumanMessage
 from pydantic import BaseModel, Field
 
 from ai_fs_agent.utils.ingest.file_content_model import FileContentModel
 from ai_fs_agent.utils.ingest.file_loader import FileLoader
-from ai_fs_agent.utils.classify.tagging_llm import TaggingLLM, TagListModel
-from ai_fs_agent.utils.classify.image_llm import ImageLLM
+from ai_fs_agent.llm_services import TaggingLLM, ImageLLM
 from ai_fs_agent.utils.classify.tag_service import TagCacheService, TagRecord
 
 
@@ -113,25 +111,10 @@ class BatchFileTagger:
         # 构建请求
         if self.image_llm is None:
             self.image_llm = ImageLLM()
-        messages_batch = []
-        sys_msg = SystemMessage(content=self.image_llm.system_prompt)
-        # TODO：对图像进行压缩处理，减少Token消耗
-        for s in image_samples:
-            human_msg = HumanMessage(
-                content=[
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": s.file_content_model.image_base64},
-                    },
-                ]
-            )
-            messages_batch.append([sys_msg, human_msg])
-        # 批量调用图像模型
-        model = self.image_llm.llm
-        # 批量生成文本描述，更新FileContentModel的content和normalized_text_for_tagging字段
-        image_responses = model.batch(
-            messages_batch,
-            config={"max_concurrency": self.max_concurrency},
+        # 批量处理图像文件，生成图片文本描述
+        image_responses = self.image_llm.process_images_batch(
+            [img_s.file_content_model for img_s in image_samples],
+            max_concurrency=self.max_concurrency,
         )
         # 更新图像FileContentModel的content字段
         # 将图像描述写入cache_record.file_description
@@ -157,22 +140,11 @@ class BatchFileTagger:
         # 初始化 LLM
         if self.tagging_llm is None:
             self.tagging_llm = TaggingLLM()
-        sys_msg = SystemMessage(content=self.tagging_llm.system_prompt)
-        messages_batch = []
-        for s in uncached_samples:
-            human_msg = HumanMessage(
-                content=(
-                    f"【文件名】{s.file_content_model.file_path}\n"
-                    f"{s.file_content_model.normalized_text_for_tagging}\n"
-                    f"{self.tagging_llm.structured_output_prompt}"
-                )
-            )
-            messages_batch.append([sys_msg, human_msg])
 
-        model = self.tagging_llm.model_with_structure
-        tag_responses: List[TagListModel] = model.batch(
-            messages_batch,
-            config={"max_concurrency": self.max_concurrency},
+        # 批量处理未命中缓存的文件，生成标签
+        tag_responses = self.tagging_llm.process_tags_batch(
+            [un_s.file_content_model for un_s in uncached_samples],
+            max_concurrency=self.max_concurrency,
         )
 
         # 将新标签写入缓存
