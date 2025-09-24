@@ -40,7 +40,7 @@ class VectorRetriever:
         retriever = self.vs.similarity_search_with_score(query=query, k=k)
         # score 越小越相似，保留 score <= score_threshold
         filtered = [
-            doc.page_content + f"(相似度: {score:.2f}，分数越低越相似)"
+            doc.page_content
             for doc, score in retriever
             if score is not None and score <= score_threshold
         ]

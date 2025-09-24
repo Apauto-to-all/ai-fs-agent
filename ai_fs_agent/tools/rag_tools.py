@@ -32,6 +32,12 @@ def rag_query(query: str, top_k: int = 5) -> Dict[str, Any]:
 
         retriever = VectorRetriever()
         results = retriever.search(query=query, k=int(top_k))
-        return {"ok": True, "results": results}
+        if results:
+            return {"ok": True, "results": results}
+        else:
+            return {
+                "ok": False,
+                "error": "无法找到相关内容，相似度度过低的内容不会返回，请优化搜索关键词",
+            }
     except Exception as e:
         return {"ok": False, "error": " RAG 查询失败，请检查配置或索引是否存在"}
