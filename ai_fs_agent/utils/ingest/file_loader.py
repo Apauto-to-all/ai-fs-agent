@@ -24,7 +24,17 @@ class FileLoader:
 
     TEXT_EXTS = {".txt", ".md", ".csv", ".tsv", ".json", ".yaml", ".yml", ".toml"}
     OFFICE_EXTS = {".docx", ".xlsx", ".pptx"}
-    IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp", ".svg"}
+    IMAGE_EXTS = {
+        ".jpg",
+        ".jpeg",
+        ".jpe",
+        ".png",
+        ".bmp",
+        ".tif",
+        ".tiff",
+        ".webp",
+        ".heic",
+    }
     PDF_EXTS = {".pdf"}
     # TODO: 扩展文件类型支持和智能文件夹处理
     # 1. 新增文件类型支持：
@@ -125,12 +135,13 @@ class FileLoader:
             mime_types = {
                 ".jpg": "image/jpeg",
                 ".jpeg": "image/jpeg",
+                ".jpe": "image/jpeg",
                 ".png": "image/png",
-                ".gif": "image/gif",
                 ".bmp": "image/bmp",
+                ".tif": "image/tiff",
                 ".tiff": "image/tiff",
                 ".webp": "image/webp",
-                ".svg": "image/svg+xml",
+                ".heic": "image/heic",
             }
             mime_type = mime_types.get(ext, "image/jpeg")  # 默认为jpeg
 
