@@ -218,3 +218,6 @@ z_temp_path/
 # 移除示例文件夹
 example/
 logs/
+
+# 排除 Opik 相关文件
+main_streaming_opik.py
