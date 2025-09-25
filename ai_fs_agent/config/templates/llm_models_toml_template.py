@@ -1,5 +1,6 @@
 # llm_models.toml 文件模板
-LLM_CONFIG_TEMPLATE = """# 模型配置文件模板
+LLM_CONFIG_TEMPLATE = """
+# 模型配置文件模板
 [models.example]
 # 使用 OpenAI 兼容协议
 provider = "openai-compatible"
@@ -27,31 +28,45 @@ api_key_env = "OPENAI_API_KEY"
 # 可选参数：透传到 OpenAIEmbeddings 的额外配置，如超时、重试等。
 extra = { timeout = 30, max_retries = 3 }
 
+# 基础模型
 [models.qwen_plus]
 provider = "openai-compatible"
 model = "qwen-plus"
 base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 api_key_env = "DASHSCOPE_API_KEY"
 
+# 快速响应模型
 [models.qwen_flash]
 provider = "openai-compatible"
 model = "qwen-flash"
 base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 api_key_env = "DASHSCOPE_API_KEY"
 
+# 复杂推理模型
 [models.deepseek_r1]
 provider = "openai-compatible"
 model = "deepseek-r1-0528"
 base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 api_key_env = "DASHSCOPE_API_KEY"
 
-
+# 图像理解模型
 [models.qwen_vl]
 provider = "openai-compatible"
 model = "qwen-vl-plus"
 base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 api_key_env = "DASHSCOPE_API_KEY"
 
+# 支持联网搜索的模型
+[models.qwen_web_search]
+provider = "openai-compatible"
+model = "qwen-flash"
+base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+api_key_env = "DASHSCOPE_API_KEY"
+# 对于支持联网的 Qwen 模型，需要添加 extra_body 参数开启联网搜索功能
+extra = { extra_body = { enable_search = true, forced_search = true, search_strategy = "turbo" } }
+rate_limiter = { requests_per_second = 15.0 }
+
+# Embedding 模型
 [models.qwen_embedding]
 provider = "openai-compatible"
 model = "text-embedding-v4"
@@ -61,6 +76,7 @@ api_key_env = "DASHSCOPE_API_KEY"
 # 原因：DashScope API 不支持接收 token IDs，只接受字符串输入。
 extra = { check_embedding_ctx_length = false }
 
+# 路由配置
 [routing]
 # 默认模型
 default = "qwen_plus"
@@ -70,6 +86,8 @@ fast = "qwen_flash"
 reason = "deepseek_r1"
 # 图像理解模型
 vision = "qwen_vl"
+# 联网搜索模型
+web_search = "qwen_web_search"
 # Embedding 模型
 embedding = "qwen_embedding"
-"""
+""".strip()

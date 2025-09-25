@@ -26,6 +26,7 @@ class RoutingConfig(BaseModel):
     fast: Optional[str] = None  # 快速响应模型 ID
     reason: Optional[str] = None  # 复杂推理模型 ID
     vision: Optional[str] = None  # 图像理解模型 ID
+    web_search: Optional[str] = None  # 支持联网搜索模型 ID
     embedding: Optional[str] = None  # Embedding 模型 ID
 
 
@@ -49,13 +50,17 @@ def _load_toml_config(path: Path) -> AppConfig:
 
     # 校验路由引用是否存在
     refs: List[str] = [routing.default]
+    # 检查路由引用的模型是否存在
+    if routing.default:
+        refs.append(routing.default)
     if routing.fast:
         refs.append(routing.fast)
     if routing.reason:
         refs.append(routing.reason)
     if routing.vision:
         refs.append(routing.vision)
-    # 添加 embedding 引用检查
+    if routing.web_search:
+        refs.append(routing.web_search)
     if routing.embedding:
         refs.append(routing.embedding)
     missing = [r for r in refs if r not in models]
@@ -75,7 +80,9 @@ class LLMManager:
 
     def get_by_role(
         self,
-        role: Literal["default", "fast", "reason", "vision", "embedding"] = "default",
+        role: Literal[
+            "default", "fast", "reason", "vision", "web_search", "embedding"
+        ] = "default",
     ):
         if role == "embedding":
             getter = self._get_embedding
