@@ -10,10 +10,11 @@ class FileContentModel(BaseModel):
 
     file_path: str = Field(..., description="文件路径，相对与工作目录的路径")
     """文件路径，相对与工作目录的路径"""
-    file_type: Literal["text", "image"] = Field(
-        default="text", description="文件类型：text或image"
+    file_type: Literal["text", "image", "program"] = Field(
+        default="text",
+        description="文件类型：text（文本，默认）、image（图像）或program（程序）",
     )
-    """文件类型：text或image"""
+    """文件类型：text（文本，默认）、image（图像）或program（程序）"""
     content: str = Field(
         default="", description="文本内容（文本文件）或图像描述（图像文件）"
     )
