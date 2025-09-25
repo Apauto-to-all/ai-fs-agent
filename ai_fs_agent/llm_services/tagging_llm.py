@@ -67,16 +67,20 @@ class TaggingLLM:
         self, file_content_models: List[FileContentModel], max_concurrency: int = 5
     ) -> List[TagListModel]:
         sys_msg = SystemMessage(content=self.system_prompt)
-        messages_batch = []
-        for s in file_content_models:
-            human_msg = HumanMessage(
-                content=(
-                    f"【文件名】{s.file_path}\n"
-                    f"{s.normalized_text_for_tagging}\n"
-                    f"{self.structured_output_prompt}"
-                )
-            )
-            messages_batch.append([sys_msg, human_msg])
+        # 使用列表推导式优化批量消息准备，提高性能
+        messages_batch = [
+            [
+                sys_msg,
+                HumanMessage(
+                    content=(
+                        f"【文件名】{s.file_path}\n"
+                        f"{s.normalized_text_for_tagging}\n"
+                        f"{self.structured_output_prompt}"
+                    )
+                ),
+            ]
+            for s in file_content_models
+        ]
 
         tag_responses: List[TagListModel] = self.model_with_structure.batch(
             messages_batch,

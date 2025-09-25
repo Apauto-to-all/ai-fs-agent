@@ -36,18 +36,21 @@ class ImageLLM:
         :return: 图像描述列表，每个元素为 AIMessage 类型，包含图像的描述文本
         """
         sys_msg = SystemMessage(content=self.system_prompt)
-        messages_batch = []
-        # TODO：对图像进行压缩处理，减少Token消耗
-        for s in image_file_content:
-            human_msg = HumanMessage(
-                content=[
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": s.image_base64},
-                    },
-                ]
-            )
-            messages_batch.append([sys_msg, human_msg])
+        # 使用列表推导式优化批量消息准备，提高性能
+        messages_batch = [
+            [
+                sys_msg,
+                HumanMessage(
+                    content=[
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": s.image_base64},
+                        },
+                    ]
+                ),
+            ]
+            for s in image_file_content
+        ]
         # 批量调用图像模型
         image_responses = self.llm.batch(
             messages_batch,
