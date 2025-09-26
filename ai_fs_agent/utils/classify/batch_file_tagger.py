@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from ai_fs_agent.utils.ingest.file_content_model import FileContentModel
 from ai_fs_agent.utils.ingest.file_loader import FileLoader
-from ai_fs_agent.llm_services import TaggingLLM, ImageLLM
+from ai_fs_agent.llm_services import TaggingLLM, ImageLLM, WebSearchLLM
 from ai_fs_agent.utils.classify.tag_service import TagCacheService, TagRecord
 
 
@@ -39,34 +39,44 @@ class BatchFileTagger:
 
     # -------- 外部主入口 --------
     def batch_tag_files(self, file_paths: List[str]) -> List[FileTaggingResult]:
-        """对一批文件进行主题标签抽取"""
+        """对一批文件进行主题标签抽取（优化版）"""
+        from collections import defaultdict
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
         samples = self._load_and_prepare_samples(file_paths)
         uncached = [s for s in samples if not s.cache_record.tags]
 
         if uncached:
-            # 分离图像文件并处理描述
-            image_samples = [
-                s for s in uncached if s.file_content_model.file_type == "image"
-            ]
-            # 储存无缓存描述的图像文件
-            image_samples_no_desc = []
-            for s in image_samples:
-                if s.cache_record.file_description:
-                    # 有缓存描述，使用缓存描述
-                    s.file_content_model.content = s.cache_record.file_description
-                    # 缓存描述也作为归一化文本用于标签提取
-                    s.file_content_model.normalized_text_for_tagging = (
-                        s.cache_record.file_description
-                    )
+            # 将有缓存描述的样本直接填充，未描述的按类型分组
+            pending_by_type = defaultdict(list)
+            for s in uncached:
+                # 不对文本类型内容进行处理
+                if s.file_content_model.file_type == "text":
+                    continue
+                desc = s.cache_record.file_description
+                if desc:
+                    s.file_content_model.content = desc
+                    s.file_content_model.normalized_text_for_tagging = desc
                 else:
-                    # 无缓存描述，添加到待处理列表
-                    image_samples_no_desc.append(s)
+                    pending_by_type[s.file_content_model.file_type].append(s)
 
-            # 处理无描述的图像文件
-            if image_samples_no_desc:
-                self._process_images_batch(image_samples_no_desc)
+            # 并发处理不同类型的无描述文件（image / software）
+            futures = []
+            with ThreadPoolExecutor(max_workers=2) as ex:
+                if pending_by_type.get("image"):
+                    futures.append(
+                        ex.submit(self._process_images_batch, pending_by_type["image"])
+                    )
+                if pending_by_type.get("software"):
+                    futures.append(
+                        ex.submit(
+                            self._process_software_batch, pending_by_type["software"]
+                        )
+                    )
+                for f in as_completed(futures):
+                    f.result()  # 若有异常会被抛出，便于定位
 
-            # 批量给所有文件打标签
+            # 最后统一批量打标签
             self._process_tags_batch(uncached)
 
         return self._assemble_results(samples)
@@ -120,6 +130,39 @@ class BatchFileTagger:
         for s, resp in zip(image_samples, image_responses):
             if not resp:
                 continue
+            s.file_content_model.content = resp.content
+            s.file_content_model.normalized_text_for_tagging = resp.content
+            s.cache_record.file_description = resp.content
+            self.cache.update_file_description(s.cache_record, resp.content)
+            updated += 1
+        if updated:
+            self.cache.flush()
+
+    def _process_software_batch(self, software_samples: List[PreparedFileSample]):
+        """
+        批量处理软件文件，通过联网搜索获取软件描述信息
+        Args:
+            software_samples: 软件文件样本列表
+        """
+        if not software_samples:
+            return
+
+        # 初始化联网搜索LLM
+        if self.web_search_llm is None:
+            self.web_search_llm = WebSearchLLM()
+
+        # 批量处理软件文件，获取软件描述信息
+        search_responses = self.web_search_llm.search_batch_files(
+            [soft_s.file_content_model for soft_s in software_samples],
+            max_concurrency=self.max_concurrency,
+        )
+
+        # 更新软件文件的描述信息
+        updated = 0
+        for s, resp in zip(software_samples, search_responses):
+            if not resp:
+                continue
+            # 联网搜索结果作为软件描述
             s.file_content_model.content = resp.content
             s.file_content_model.normalized_text_for_tagging = resp.content
             s.cache_record.file_description = resp.content
