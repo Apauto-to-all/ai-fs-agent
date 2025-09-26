@@ -10,11 +10,11 @@ class FileContentModel(BaseModel):
 
     file_path: str = Field(..., description="文件路径，相对与工作目录的路径")
     """文件路径，相对与工作目录的路径"""
-    file_type: Literal["text", "image", "program"] = Field(
+    file_type: Literal["text", "image", "software"] = Field(
         default="text",
-        description="文件类型：text（文本，默认）、image（图像）或program（程序）",
+        description="文件类型：text（文本，默认）、image（图像）或software（程序）",
     )
-    """文件类型：text（文本，默认）、image（图像）或program（程序）"""
+    """文件类型：text（文本，默认）、image（图像）或software（程序）"""
     content: str = Field(
         default="", description="文本内容（文本文件）或图像描述（图像文件）"
     )
@@ -46,16 +46,11 @@ class FileContentModel(BaseModel):
         if data.get("normalized_text_for_id") is None:
             file_type = data.get("file_type", "text")
             content = data.get("content", "")
-            image_base64 = data.get("image_base64")
 
             if file_type == "text":
                 # 对于文本文件，使用split_for_tag_cache方法
                 # 标识化文本只需要前中后三段拼接，不需要保持语义完整性
                 sections = processor.split_for_tag_cache(content)
-                normalized = sections.front + sections.middle + sections.back
-            elif file_type == "image" and image_base64:
-                # 对于图像文件，也进行3段切割
-                sections = processor.split_for_tag_cache(image_base64)
                 normalized = sections.front + sections.middle + sections.back
             else:
                 # 其他文件类型，为空
