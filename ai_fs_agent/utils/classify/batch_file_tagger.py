@@ -34,19 +34,19 @@ class BatchFileTagger:
         self.loader = FileLoader()
         self.tagging_llm: TaggingLLM = None
         self.image_llm: ImageLLM = None
+        self.web_search_llm: WebSearchLLM = None
         self.cache = TagCacheService()
         self.max_concurrency = max_concurrency
 
     # -------- 外部主入口 --------
     def batch_tag_files(self, file_paths: List[str]) -> List[FileTaggingResult]:
         """对一批文件进行主题标签抽取（优化版）"""
-        from collections import defaultdict
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-
         samples = self._load_and_prepare_samples(file_paths)
         uncached = [s for s in samples if not s.cache_record.tags]
 
         if uncached:
+            from collections import defaultdict
+
             # 将有缓存描述的样本直接填充，未描述的按类型分组
             pending_by_type = defaultdict(list)
             for s in uncached:
@@ -60,21 +60,27 @@ class BatchFileTagger:
                 else:
                     pending_by_type[s.file_content_model.file_type].append(s)
 
-            # 并发处理不同类型的无描述文件（image / software）
-            futures = []
-            with ThreadPoolExecutor(max_workers=2) as ex:
-                if pending_by_type.get("image"):
-                    futures.append(
-                        ex.submit(self._process_images_batch, pending_by_type["image"])
-                    )
-                if pending_by_type.get("software"):
-                    futures.append(
-                        ex.submit(
-                            self._process_software_batch, pending_by_type["software"]
+            if pending_by_type["image"] or pending_by_type["software"]:
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+
+                # 并发处理不同类型的无描述文件（image / software）
+                futures = []
+                with ThreadPoolExecutor(max_workers=2) as ex:
+                    if pending_by_type.get("image"):
+                        futures.append(
+                            ex.submit(
+                                self._process_images_batch, pending_by_type["image"]
+                            )
                         )
-                    )
-                for f in as_completed(futures):
-                    f.result()  # 若有异常会被抛出，便于定位
+                    if pending_by_type.get("software"):
+                        futures.append(
+                            ex.submit(
+                                self._process_software_batch,
+                                pending_by_type["software"],
+                            )
+                        )
+                    for f in as_completed(futures):
+                        f.result()  # 若有异常会被抛出，便于定位
 
             # 最后统一批量打标签
             self._process_tags_batch(uncached)
@@ -146,17 +152,14 @@ class BatchFileTagger:
         """
         if not software_samples:
             return
-
         # 初始化联网搜索LLM
         if self.web_search_llm is None:
             self.web_search_llm = WebSearchLLM()
-
         # 批量处理软件文件，获取软件描述信息
         search_responses = self.web_search_llm.search_batch_files(
             [soft_s.file_content_model for soft_s in software_samples],
             max_concurrency=self.max_concurrency,
         )
-
         # 更新软件文件的描述信息
         updated = 0
         for s, resp in zip(software_samples, search_responses):
