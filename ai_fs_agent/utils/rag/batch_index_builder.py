@@ -58,9 +58,7 @@ class BatchIndexBuilder:
                 if file_content.file_type != "text":
                     if self.tags_cache is None:
                         self.tags_cache = TagCacheService()
-                    tags_record = self.tags_cache.get_or_init_record(
-                        file_content.normalized_text_for_id, use_approx=False
-                    )
+                    tags_record = self.tags_cache.get_or_init_record(file_content)
                     if tags_record.file_description:
                         file_content.content = tags_record.file_description
                     else:

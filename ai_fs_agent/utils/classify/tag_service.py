@@ -5,6 +5,7 @@ from typing import Dict, Optional, List
 from pydantic import BaseModel, Field
 from simhash import Simhash
 from ai_fs_agent.config.paths_config import TAGS_CACHE_PATH
+from ai_fs_agent.utils.ingest.file_loader import FileContentModel
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,7 @@ class TagCacheService:
     """
 
     def __init__(self, simhash_hamming_threshold: int = 8):
+        # TODO：对缓存功能进行性能优化
         if TAGS_CACHE_PATH.exists():
             self.cache_model = TagCacheModel.model_validate_json(
                 TAGS_CACHE_PATH.read_text(encoding="utf-8")
@@ -61,34 +63,46 @@ class TagCacheService:
         self._simhash_hamming_threshold = simhash_hamming_threshold
 
     # -------- 公共接口 --------
-    def get_or_init_record(self, normalized: str, use_approx: bool = True) -> TagRecord:
-        """根据文本内容获取或初始化标签记录（不含标签）
-        Args:
-            normalized: 归一化的文本内容，用于标识
-            use_approx: 是否启用近似复用，默认为True
+    def get_or_init_record(
+        self, file_content_model: FileContentModel, use_approx: bool = True
+    ) -> TagRecord:
         """
-        # TODO：对缓存功能进行性能优化
-        cid = self._text_hash(normalized)
+        根据文件内容模型获取或初始化标签记录
+        优化：仅对文本文件进行相似度计算，非文本文件跳过此步骤以提升性能
+
+        Args:
+            file_content_model: 文件内容模型，包含文件类型和标识信息
+            use_approx: 是否启用近似复用，默认为True（仅对文本文件有效）
+
+        Returns:
+            TagRecord: 标签记录对象
+        """
+        normalized_text_for_id = file_content_model.normalized_text_for_id
+        cid = self._text_hash(normalized_text_for_id)
+
+        # 精确匹配检查
         hit = self.get_by_id(cid)
         if hit:
             return hit
-        sh = self._simhash64(normalized)
 
-        # 根据参数决定是否进行近似复用
+        # 仅对文本文件进行相似度计算
         tags = []
         file_description = None
+        simhash_value = None
 
-        if use_approx:
-            approx = self._find_by_simhash(sh, self._simhash_hamming_threshold)
-            if approx:
-                # 近似复用
-                tags = approx.tags
-                file_description = approx.file_description
+        if file_content_model.file_type == "text" and use_approx:
+            simhash_value = self._simhash64(normalized_text_for_id)
+            approx_record = self._find_by_simhash(
+                simhash_value, self._simhash_hamming_threshold
+            )
+            if approx_record:
+                tags = approx_record.tags
+                file_description = approx_record.file_description
 
         # 创建记录
         record = TagRecord(
             content_id=cid,
-            simhash64=sh,
+            simhash64=simhash_value,
             tags=tags,
             file_description=file_description,
         )

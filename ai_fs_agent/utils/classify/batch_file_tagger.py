@@ -90,9 +90,7 @@ class BatchFileTagger:
                 logger.error(f"加载文件失败：{path}，错误信息：{e}")
                 continue
             # 查询缓存
-            cache_record = self.cache.get_or_init_record(
-                file_content_model.normalized_text_for_id
-            )
+            cache_record = self.cache.get_or_init_record(file_content_model)
             result.append(
                 PreparedFileSample(
                     file_content_model=file_content_model,
